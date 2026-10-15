@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neon Brawl</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="hud" hidden>
+  <div class="bars">
+    <div class="side p1">
+      <div class="name-row"><span class="name" id="n1">RYKA</span><span class="pips" id="pips1"><i></i><i></i></span></div>
+      <div class="hp"><div class="trail" id="trail1"></div><div class="fill" id="hp1"></div></div>
+      <div class="meter"><div id="m1"></div><span>SUPER</span></div>
+    </div>
+    <div id="timer">99</div>
+    <div class="side p2">
+      <div class="name-row"><span class="pips" id="pips2"><i></i><i></i></span><span class="name" id="n2">VOLT</span></div>
+      <div class="hp"><div class="trail" id="trail2"></div><div class="fill" id="hp2"></div></div>
+      <div class="meter"><div id="m2"></div><span>SUPER</span></div>
+    </div>
+  </div>
+  <div class="combo p1" id="combo1"></div>
+  <div class="combo p2" id="combo2"></div>
+  <div id="netTag" hidden></div>
+</div>
+
+<div id="announce"></div>
+<div id="subtext"></div>
+
+<div id="menu" class="overlay">
+  <div class="menu-card">
+    <h1 class="logo">NEON<span>BRAWL</span></h1>
+    <p class="tag">Two fighters. One ring. First to two rounds.</p>
+
+    <div class="modes">
+      <div class="mode">
+        <button id="btnCpu" class="primary">Fight the CPU</button>
+        <div class="diff" role="radiogroup" aria-label="CPU difficulty">
+          <button data-diff="easy">Easy</button>
+          <button data-diff="normal" class="on">Normal</button>
+          <button data-diff="hard">Hard</button>
+        </div>
+      </div>
+      <div class="mode">
+        <button id="btnLocal">2 players, one keyboard</button>
+      </div>
+      <div class="mode online">
+        <button id="btnHost">Host online match</button>
+        <form id="joinForm" class="join">
+          <input id="joinCode" maxlength="5" placeholder="Room code" autocomplete="off" spellcheck="false" aria-label="Room code">
+          <button type="submit">Join</button>
+        </form>
+        <p id="netStatus" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div>
+        <h3>Player 1 / solo / online</h3>
+        <dl>
+          <dt>Move</dt><dd><kbd>A</kbd><kbd>D</kbd></dd>
+          <dt>Sidestep</dt><dd><kbd>W</kbd><kbd>S</kbd></dd>
+          <dt>Jump</dt><dd><kbd>Space</kbd></dd>
+          <dt>Punch</dt><dd><kbd>J</kbd> or <kbd>F</kbd></dd>
+          <dt>Kick</dt><dd><kbd>K</kbd> or <kbd>G</kbd></dd>
+          <dt>Block</dt><dd><kbd>L</kbd> or <kbd>H</kbd> (hold)</dd>
+          <dt>Super</dt><dd><kbd>U</kbd> or <kbd>R</kbd> (full meter)</dd>
+        </dl>
+      </div>
+      <div>
+        <h3>Player 2 (local)</h3>
+        <dl>
+          <dt>Move</dt><dd><kbd>←</kbd><kbd>→</kbd></dd>
+          <dt>Sidestep</dt><dd><kbd>↑</kbd><kbd>↓</kbd></dd>
+          <dt>Jump</dt><dd><kbd>Right Shift</kbd> / <kbd>Num 0</kbd></dd>
+          <dt>Punch</dt><dd><kbd>,</kbd> / <kbd>Num 1</kbd></dd>
+          <dt>Kick</dt><dd><kbd>.</kbd> / <kbd>Num 2</kbd></dd>
+          <dt>Block</dt><dd><kbd>/</kbd> / <kbd>Num 3</kbd></dd>
+          <dt>Super</dt><dd><kbd>;</kbd> / <kbd>Num 4</kbd></dd>
+        </dl>
+      </div>
+    </div>
+    <p class="hint">Gamepads work too: stick to move, A jump, X punch, Y kick, RB block, B super. Land a hit, then press punch or kick again to chain a combo. <kbd>Esc</kbd> pauses.</p>
+  </div>
+</div>
+
+<div id="pause" class="overlay" hidden>
+  <div class="menu-card small">
+    <h2>Paused</h2>
+    <button id="btnResume" class="primary">Resume</button>
+    <button id="btnQuit">Quit to menu</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module" src="game.js"></script>
+</body>
+</html>
