@@ -133,7 +133,7 @@
 
   function resolveHit(att, def, m) {
     var blocked = (def.holdBack || def.state === 'block') && !def.atk && def.stun <= 0 && def.y <= 0;
-    var dmg = m.dmg;
+    var dmg = m.dmg * (att.idx === 1 ? DIFF[G.diff].dmg : 1); // CPU hits softer on lower levels
     if (blocked) dmg *= m === MOVES.super ? 0.35 : 0.1;
     else {
       att.combo = def.stun > 0 ? att.combo + 1 : 1;
@@ -223,9 +223,10 @@
 
   // ---------- CPU ----------
   var DIFF = {
-    easy: { react: 0.12, aggr: 0.35, think: 0.5, combo: 0.15, label: 'Easy' },
-    normal: { react: 0.38, aggr: 0.6, think: 0.3, combo: 0.45, label: 'Normal' },
-    hard: { react: 0.68, aggr: 0.85, think: 0.16, combo: 0.8, label: 'Hard' }
+    // Tuned gentler than the desktop CPU: watch controls are slower to use.
+    easy: { react: 0.05, aggr: 0.2, think: 0.8, combo: 0, dmg: 0.6, label: 'Easy' },
+    normal: { react: 0.2, aggr: 0.4, think: 0.5, combo: 0.2, dmg: 0.8, label: 'Normal' },
+    hard: { react: 0.45, aggr: 0.65, think: 0.28, combo: 0.5, dmg: 1, label: 'Hard' }
   };
   var ai = { t: 0, act: 'approach', rolled: false, blocking: false, blockT: 0 };
   function cpuInput(me, opp, dt) {
