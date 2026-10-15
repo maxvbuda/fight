@@ -10,6 +10,16 @@ A 3D fighting game that runs in the browser, built with [three.js](https://three
 - **2 players, one keyboard**: local versus.
 - **Online**: one player hosts and gets a 5-letter room code, and the other player enters it to join. Connections are peer-to-peer over WebRTC ([PeerJS](https://peerjs.com)). The host runs the simulation, and the guest sends inputs and renders the host's state.
 
+## Apple Watch
+
+Open the link on an Apple Watch (for example, by sending it to yourself in Messages and tapping it). Small screens and browsers without WebGL load `watch.html`, a lightweight edition that draws the same 3D fighters on a 2D canvas. Play there is against the CPU only:
+
+- **◀ ▶**: move. Holding away from your opponent blocks.
+- **P / K**: punch and kick. Press both together for a super when your meter is full.
+- **Tap the arena**: jump.
+
+To force the full version on a small screen, add `?full` to the URL.
+
 ## Controls
 
 | Action | Player 1 / solo / online | Player 2 (local) | Gamepad |

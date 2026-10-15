@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="disabled-adaptations" content="watch">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Neon Brawl Mini</title>
+<style>
+  /* Watch edition: one dark screen, controls along the bottom edge. No web fonts (watchOS ignores them). */
+  :root {
+    --bg: #07060f; --fg: #f1ecff; --muted: #a69cc8;
+    --p1: #ff2d6f; --p2: #2de2ff; --gold: #ffd166; --line: rgba(190, 170, 255, 0.22);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, system-ui, "Helvetica Neue", sans-serif; touch-action: none; }
+  canvas { position: fixed; inset: 0; display: block; touch-action: none; }
+  #pad { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 3px;
+    padding: 0 6px calc(4px + env(safe-area-inset-bottom, 0px)); }
+  #pad button { flex: 1; height: 40px; min-width: 0; border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08); color: var(--fg); font: 700 15px -apple-system, system-ui, sans-serif; padding: 0; touch-action: none; }
+  #pad button.on { background: rgba(255, 255, 255, 0.28); }
+  #pad .atk { color: var(--gold); }
+  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; padding: 12px; text-align: center; background: rgba(7, 6, 15, 0.82); }
+  .logo { margin: 0; font-size: 26px; line-height: 0.95; font-weight: 900; letter-spacing: 0.02em; color: var(--p1); }
+  .logo span { display: block; color: var(--p2); }
+  .overlay button { width: 100%; max-width: 220px; height: 42px; border-radius: 21px; border: 0;
+    font: 700 16px -apple-system, system-ui, sans-serif; color: #14040b; background: var(--p1); }
+  .overlay button.alt { background: rgba(255, 255, 255, 0.12); color: var(--fg); border: 1px solid var(--line); font-size: 14px; height: 34px; }
+  .overlay p { margin: 0; font-size: 11px; line-height: 1.35; color: var(--muted); max-width: 220px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="pad" hidden>
+  <button id="bL" aria-label="Move left">◀</button>
+  <button id="bR" aria-label="Move right">▶</button>
+  <button id="bP" class="atk" aria-label="Punch">P</button>
+  <button id="bK" class="atk" aria-label="Kick">K</button>
+</div>
+
+<div id="menu" class="overlay">
+  <h1 class="logo">NEON<span>BRAWL</span></h1>
+  <button id="go">Fight</button>
+  <button id="diff" class="alt">CPU: Normal</button>
+  <p>Hold back to block. Tap the arena to jump. Press P and K together for a super when your meter is full.</p>
+</div>
+
+<script src="watch.js"></script>
+</body>
+</html>

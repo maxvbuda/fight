@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Neon Brawl</title>
+<script>
+  // Tiny screens (Apple Watch) and browsers without WebGL get the lightweight watch edition.
+  (function () {
+    if (/[?&]full\b/.test(location.search)) return;
+    var small = Math.min(screen.width, screen.height) < 300, gl = false;
+    try { var c = document.createElement('canvas'); gl = !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl'))); } catch (e) {}
+    if (small || !gl) location.replace('watch.html');
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
