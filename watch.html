@@ -31,11 +31,19 @@
     font: 700 16px -apple-system, system-ui, sans-serif; color: #14040b; background: var(--p1); }
   .overlay button.alt { background: rgba(255, 255, 255, 0.12); color: var(--fg); border: 1px solid var(--line); font-size: 14px; height: 34px; }
   .overlay p { margin: 0; font-size: 11px; line-height: 1.35; color: var(--muted); max-width: 220px; }
+  #bS { position: fixed; left: 50%; top: calc(max(6px, 3vh) + 34px); transform: translateX(-50%);
+    width: 58%; max-width: 160px; height: 34px; border: 0; border-radius: 17px; padding: 0;
+    background: var(--gold); color: #1a1000; font: 900 15px -apple-system, system-ui, sans-serif; letter-spacing: 0.06em;
+    box-shadow: 0 0 14px rgba(255, 209, 102, 0.7); touch-action: none; animation: glow 0.5s infinite alternate; }
+  #bS.on { transform: translateX(-50%) scale(0.94); }
+  @keyframes glow { from { box-shadow: 0 0 6px rgba(255, 209, 102, 0.5); } to { box-shadow: 0 0 18px rgba(255, 209, 102, 0.95); } }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+
+<button id="bS" hidden aria-label="Super attack">SUPER</button>
 
 <div id="pad" hidden>
   <button id="bL" aria-label="Move left">◀</button>
@@ -48,7 +56,7 @@
   <h1 class="logo">NEON<span>BRAWL</span></h1>
   <button id="go">Fight</button>
   <button id="diff" class="alt">CPU: Normal</button>
-  <p>Hold back to block. Tap the arena to jump. Press P and K together for a super when your meter is full.</p>
+  <p>Hold back to block. Tap the arena to jump. When your meter is full, tap SUPER.</p>
 </div>
 
 <script src="watch.js"></script>

@@ -632,10 +632,13 @@ function resolveHit(att, def, m) {
     fx('sfx', 'block');
     G.hitstop = 0.035;
   } else {
-    def.stun = m.stun;
-    def.atk = null;
-    def.state = 'hit';
     def.flash = 0.12;
+    // A super in progress can't be interrupted: the defender takes the damage but keeps attacking.
+    if (!(def.atk && def.atk.name === 'super')) {
+      def.stun = m.stun;
+      def.atk = null;
+      def.state = 'hit';
+    }
     if (m.launch || def.hp <= 0) def.vel.y = 6.2;
     const big = m === MOVES.super;
     fx('burst', [hx, hy, hz, att.colorHex, big ? 50 : m === MOVES.kick ? 26 : 18, big ? 9 : 6]);

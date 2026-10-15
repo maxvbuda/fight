@@ -78,7 +78,7 @@
   function startAttack(f, name) {
     f.atk = { name: name, t: 0, hit: false };
     f.state = 'attack';
-    if (name === 'super') { f.meter = 0; wave(f.x + f.face * 0.5, 1.3, f.look.suit); }
+    if (name === 'super') { f.meter = 0; if (f.idx === 0) superBuf = 0; wave(f.x + f.face * 0.5, 1.3, f.look.suit); }
   }
 
   function updateFighter(f, dt, inp, o) {
@@ -98,7 +98,7 @@
     } else if (f.atk) {
       var a = f.atk, m = MOVES[a.name];
       a.t += dt;
-      if (inp.super && f.meter >= 100 && a.name !== 'super' && a.t < 0.12) { startAttack(f, 'super'); a = f.atk; m = MOVES.super; }
+      if (inp.super && f.meter >= 100 && a.name !== 'super' && (a.t < 0.12 || a.hit)) { startAttack(f, 'super'); a = f.atk; m = MOVES.super; }
       if (!grounded) move = f.airV;
       else if (a.t > m.start * 0.5 && a.t < m.start + m.active && dist > 0.95) move = f.face * m.lunge;
       if (a.t >= m.start && a.t < m.start + m.active && !a.hit && dist < m.range && Math.abs(f.y - o.y) < 1.1 && o.state !== 'ko') {
@@ -149,7 +149,9 @@
       burst(hx, hy, [159, 232, 255], 8, 4);
       G.hitstop = 0.035;
     } else {
-      def.stun = m.stun; def.atk = null; def.state = 'hit'; def.flash = 0.12;
+      def.flash = 0.12;
+      // A super in progress can't be interrupted: the defender takes the damage but keeps attacking.
+      if (!(def.atk && def.atk.name === 'super')) { def.stun = m.stun; def.atk = null; def.state = 'hit'; }
       if (m.launch || def.hp <= 0) def.vy = 6.2;
       var big = m === MOVES.super;
       burst(hx, hy, att.look.suit, big ? 36 : m === MOVES.kick ? 18 : 12, big ? 9 : 6);
@@ -263,6 +265,7 @@
   var held = { L: false, R: false };
   var taps = { punch: false, kick: false, jump: false, super: false };
   var lastP = -1, lastK = -1;
+  var superBuf = 0; // a SUPER tap is remembered briefly so it fires once the fighter is free
   function now() { return Date.now(); }
   function pressAttack(which) {
     var t = now();
@@ -290,6 +293,8 @@
   bindButton('bR', function () { held.R = true; }, function () { held.R = false; });
   bindButton('bP', function () { pressAttack('P'); });
   bindButton('bK', function () { pressAttack('K'); });
+  bindButton('bS', function () { superBuf = 0.5; });
+  var superBtn = document.getElementById('bS');
 
   function onArenaTap(e) {
     if (G.phase === 'menu') return;
@@ -308,14 +313,15 @@
     if (c === 'KeyJ' || c === 'KeyZ') pressAttack('P');
     if (c === 'KeyK' || c === 'KeyX') pressAttack('K');
     if (c === 'Space' || c === 'KeyW' || c === 'ArrowUp') taps.jump = true;
-    if (c === 'KeyU') taps.super = true;
+    if (c === 'KeyU') superBuf = 0.5;
     if (c === 'Enter' && G.phase === 'over') menuOpen();
   });
   window.addEventListener('keyup', function (e) { keys[e.code || e.key] = false; });
 
   function playerInput() {
     var l = held.L || keys.ArrowLeft || keys.KeyA, r = held.R || keys.ArrowRight || keys.KeyD;
-    var inp = { move: (r ? 1 : 0) - (l ? 1 : 0), jump: taps.jump, punch: taps.punch && !taps.super, kick: taps.kick && !taps.super, super: taps.super };
+    var sup = taps.super || superBuf > 0;
+    var inp = { move: (r ? 1 : 0) - (l ? 1 : 0), jump: taps.jump, punch: taps.punch && !sup, kick: taps.kick && !sup, super: sup };
     return inp;
   }
   var NONE = { move: 0, jump: false, punch: false, kick: false, super: false };
@@ -604,14 +610,6 @@
         ctx.fillText(F[c].combo + ' HITS', c === 0 ? side : W - side, top + 42);
       }
     }
-    if (F[0].meter >= 100 && G.phase === 'fight') {
-      ctx.textAlign = 'center';
-      ctx.font = '700 10px -apple-system, system-ui, sans-serif';
-      ctx.fillStyle = '#ffd166';
-      ctx.globalAlpha = 0.6 + 0.4 * Math.sin(Date.now() / 120);
-      ctx.fillText('P+K SUPER', W / 2, top + 34);
-      ctx.globalAlpha = 1;
-    }
   }
   function drawAnnounce() {
     if (!ann.text) return;
@@ -650,6 +648,7 @@
       updateFighter(F[1], rdt, NONE, F[0]);
     } else step(rdt);
     taps.punch = taps.kick = taps.jump = taps.super = false;
+    if (superBuf > 0 && F[0].stun <= 0) superBuf -= rdt; // wait out hitstun, then fire
     updateFx(rdt);
     updateCamera(rdt);
     ctx.save();
@@ -659,6 +658,8 @@
     drawFx();
     ctx.restore();
     if (G.phase !== 'menu') { drawHud(); drawAnnounce(); }
+    var showSuper = G.phase === 'fight' && F[0].meter >= 100;
+    if (superBtn.hidden === showSuper) superBtn.hidden = !showSuper;
   }
   window.requestAnimationFrame(frame);
 
