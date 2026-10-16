@@ -180,6 +180,13 @@
     ['menu', 'lobby'].forEach(function (x) { $(x).hidden = x !== id; });
     $('pad').hidden = id !== 'game';
     if (id !== 'game') { superBtn.hidden = true; overEl.hidden = true; }
+    syncScroll();
+  }
+  // Let the page scroll (with the Digital Crown or a finger) while a menu screen is up.
+  function syncScroll() {
+    var on = !$('menu').hidden || !$('lobby').hidden || !overEl.hidden;
+    var root = document.documentElement;
+    if (root.classList.contains('scroll') !== on) { root.classList.toggle('scroll', on); window.scrollTo(0, 0); }
   }
   function netMsg(t) { $('netMsg').textContent = t; $('lbNote').textContent = t; }
 
@@ -646,9 +653,11 @@
     var showOver = A.mode !== 'menu' && S.phase === 'over';
     if (overEl.hidden === showOver) {
       overEl.hidden = !showOver;
+      syncScroll();
       $('bAgain').textContent = A.mode === 'guest' ? 'Ask for rematch' : 'Rematch';
     }
   }
+  syncScroll();
   window.requestAnimationFrame(frame);
 
   window.NBW = { A: A, Sim: Sim, Net: Net };
