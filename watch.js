@@ -623,7 +623,7 @@
       if (A.mode === 'host') {
         A.pending = A.pending.concat(ev);
         A.sendAcc += rdt;
-        if (A.sendAcc >= 1 / 25) { A.sendAcc = 0; Net.sendSnap(Sim.pack(S, A.pending)); A.pending = []; }
+        if (A.sendAcc >= 1 / 20) { A.sendAcc = 0; Net.sendSnap(Sim.pack(S, A.pending)); A.pending = []; }
       }
     }
     taps.punch = taps.kick = taps.jump = false;

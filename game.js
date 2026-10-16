@@ -1461,7 +1461,7 @@ function frame(now) {
     if (A.mode === 'host') {
       A.pending.push(...ev);
       A.sendAcc += rdt;
-      if (A.sendAcc >= 1 / 30) { A.sendAcc = 0; NBNet.sendSnap(NBSim.pack(S, A.pending)); A.pending = []; }
+      if (A.sendAcc >= 1 / 20) { A.sendAcc = 0; NBNet.sendSnap(NBSim.pack(S, A.pending)); A.pending = []; }
     }
   }
   pressed.clear();

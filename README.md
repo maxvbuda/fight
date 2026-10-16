@@ -33,12 +33,12 @@ Open the link on the watch (for example, by sending it to yourself in Messages a
 - **SUPER**: appears when your meter is full. Tap it to fire.
 - **Tap the arena**: jump.
 
-On the watch, the CPU is gentler and rounds last 60 seconds. Online play needs a browser that supports WebRTC. To force the full version on a small screen, add `?full` to the URL.
+On the watch, the CPU is gentler and rounds last 60 seconds. Online play works on the watch too: it only needs WebSockets, not WebRTC. To force the full version on a small screen, add `?full` to the URL.
 
 ## Code
 
 - `sim.js`: rules, physics, CPU and rounds, shared by both versions so either can host a room.
-- `net.js`: online rooms (PeerJS/WebRTC). The host runs the simulation; guests send inputs and draw the host's snapshots.
+- `net.js`: online rooms. Messages go over a WebSocket to a free public MQTT broker (EMQX, HiveMQ or Mosquitto, picked by the room code) using a tiny built-in MQTT client, so no WebRTC and no server of our own. The host runs the simulation; guests send inputs and draw the host's snapshots.
 - `game.js`: the full version (three.js rendering, keyboard and gamepad input).
 - `watch.js`: the watch version (canvas rendering, touch controls).
 
