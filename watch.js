@@ -35,6 +35,14 @@
     vg.fillStyle = gr; vg.fillRect(0, 0, w2, h2);
   }
   window.addEventListener('resize', resize);
+  // On a reload the watch can run this before the screen size has settled, and it restores the
+  // old scroll position. Start at the top, re-measure once things settle, and keep checking the
+  // size every frame (see frame()) so a late change is always picked up.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  ['load', 'pageshow', 'orientationchange'].forEach(function (ev) {
+    window.addEventListener(ev, function () { window.scrollTo(0, 0); resize(); });
+  });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
   resize();
 
   // ---------- 3x3 rotation math (same Euler order as three.js: XYZ) ----------
@@ -879,6 +887,7 @@
     var rdt = last ? Math.min((ts - last) / 1000, 1 / 20) : 1 / 60;
     last = ts;
     var S = A.S;
+    if (window.innerWidth !== W || window.innerHeight !== H) resize();
     // If the watch can't keep up (under ~26 fps for 2 s), drop the reflection, beams and highlights.
     frameDt = rdt;
     avgDt += (rdt - avgDt) * 0.05;
