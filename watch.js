@@ -8,7 +8,8 @@
   var $ = function (id) { return document.getElementById(id); };
 
   var cv = $('c');
-  var ctx = cv.getContext('2d');
+  // Opaque canvas (we paint every pixel each frame): cheaper for WebKit to composite.
+  var ctx = cv.getContext('2d', { alpha: false }) || cv.getContext('2d');
   var W = 0, H = 0, PAD_H = 46, vignette = null;
   // Graphics quality, picked automatically (see frame()) and remembered for next time:
   // 3 full, 2 drops to 75% resolution and the vignette, 1 also drops the floor reflection,
@@ -47,7 +48,15 @@
   }
   function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
   function hexRgb(h) { return [(h >> 16) & 255, (h >> 8) & 255, h & 255]; }
-  function rgb(c, k) { return 'rgb(' + Math.round(clamp(c[0] * k, 0, 255)) + ',' + Math.round(clamp(c[1] * k, 0, 255)) + ',' + Math.round(clamp(c[2] * k, 0, 255)) + ')'; }
+  // Colour strings are cached: building and parsing hundreds of them a frame adds up on a watch.
+  var rgbCache = {}, rgbCount = 0;
+  function rgb(c, k) {
+    var r = Math.round(clamp(c[0] * k, 0, 255)), g = Math.round(clamp(c[1] * k, 0, 255)), b = Math.round(clamp(c[2] * k, 0, 255));
+    var key = (r << 16) | (g << 8) | b, v = rgbCache[key];
+    if (v) return v;
+    if (++rgbCount > 4000) { rgbCache = {}; rgbCount = 0; }
+    return (rgbCache[key] = 'rgb(' + r + ',' + g + ',' + b + ')');
+  }
   function mix(c, w) { return [c[0] + (255 - c[0]) * w, c[1] + (255 - c[1]) * w, c[2] + (255 - c[2]) * w]; }
 
   var LOOKS = Sim.ROSTER.map(function (r) { return { suit: hexRgb(r.color), trim: hexRgb(r.trim), skin: hexRgb(r.skin) }; });
@@ -432,7 +441,7 @@
   function ringPath(r, cx, cz, n) {
     ctx.beginPath();
     var first = true;
-    n = n || 48;
+    n = n || 32;
     for (var i = 0; i <= n; i++) {
       var a = i / n * Math.PI * 2, q = project([(cx || 0) + Math.cos(a) * r, 0, (cz || 0) + Math.sin(a) * r]);
       if (!q) { first = true; continue; }
@@ -450,19 +459,25 @@
   var camFlashes = [], hype = 0;
   var BEAMS = [[1, 45, 111], [45, 226, 255], [255, 209, 102]];
 
+  var skyG = null;
   function drawArena() {
     var viewH = H - PAD_H, now = Date.now() / 1000;
     // Horizon height on screen, from the camera's tilt.
     var fl = Math.sqrt(basis.f[0] * basis.f[0] + basis.f[2] * basis.f[2]) || 1;
     var hy = clamp(CY - FOCAL * (basis.f[0] * basis.u[0] + basis.f[2] * basis.u[2]) / (fl * fl), -viewH, viewH * 2);
-    var g = ctx.createLinearGradient(0, 0, 0, viewH);
-    g.addColorStop(0, '#040309'); g.addColorStop(clamp(hy / viewH, 0.05, 0.95), '#2a0f3a'); g.addColorStop(1, '#07060f');
-    ctx.fillStyle = g;
+    // The sky gradients only change when the horizon moves a whole pixel, so reuse them otherwise.
+    var hyR = Math.round(hy);
+    if (!skyG || skyG.hy !== hyR || skyG.h !== viewH) {
+      var g = ctx.createLinearGradient(0, 0, 0, viewH);
+      g.addColorStop(0, '#040309'); g.addColorStop(clamp(hyR / viewH, 0.05, 0.95), '#2a0f3a'); g.addColorStop(1, '#07060f');
+      var hg = ctx.createLinearGradient(0, hyR - 30, 0, hyR + 6);
+      hg.addColorStop(0, 'rgba(255,45,111,0)'); hg.addColorStop(0.7, 'rgba(255,45,111,0.25)'); hg.addColorStop(1, 'rgba(45,226,255,0.14)');
+      skyG = { hy: hyR, h: viewH, g: g, hg: hg };
+    }
+    ctx.fillStyle = skyG.g;
     ctx.fillRect(0, 0, W, H);
-    var hg = ctx.createLinearGradient(0, hy - 30, 0, hy + 6);
-    hg.addColorStop(0, 'rgba(255,45,111,0)'); hg.addColorStop(0.7, 'rgba(255,45,111,0.25)'); hg.addColorStop(1, 'rgba(45,226,255,0.14)');
-    ctx.fillStyle = hg;
-    ctx.fillRect(0, hy - 30, W, 36);
+    ctx.fillStyle = skyG.hg;
+    ctx.fillRect(0, hyR - 30, W, 36);
     ctx.lineCap = 'round';
     for (var i = 0; i < 10; i++) {
       var a = i / 10 * Math.PI * 2, px = Math.cos(a) * 16, pz = Math.sin(a) * 16;
@@ -524,7 +539,7 @@
     ringPath(6); ctx.strokeStyle = 'rgba(45,226,255,0.4)'; ctx.lineWidth = 1; ctx.stroke();
     ringPath(1.8); ctx.strokeStyle = 'rgba(255,209,102,0.5)'; ctx.lineWidth = 1; ctx.stroke();
     // LED chase around the ring edge.
-    for (i = 0; i < 48; i++) {
+    for (i = 0; i < 48; i += Q >= 1 ? 1 : 2) {
       var la = i / 48 * Math.PI * 2, lq = project([Math.cos(la) * 9.45, 0.02, Math.sin(la) * 9.45]);
       if (!lq) continue;
       var w8 = 0.5 + 0.5 * Math.sin(i * 0.8 - now * 5), ls = Math.max(1, 0.07 * FOCAL / lq.z);
@@ -868,6 +883,7 @@
   var last = 0;
   // Add ?fps to the address to show a frame-rate counter ("low" means the light graphics kicked in).
   var SHOW_FPS = /[?&]fps\b/.test(location.search), fpsN = 0, fpsT = 0, fpsVal = 0;
+  var prof = { sim: 0, arena: 0, fighters: 0, fx: 0, hud: 0, n: 0 }, profText = '';
   function frame(ts) {
     window.requestAnimationFrame(frame);
     var rdt = last ? Math.min((ts - last) / 1000, 1 / 20) : 1 / 60;
@@ -899,7 +915,9 @@
         if (A.mode === 'host' && f.kind === 'remote') return Net.inputFor(i) || Sim.NONE;
         return Sim.NONE;
       });
+      var tSim = performance.now();
       Sim.step(S, rdt, inputs);
+      prof.sim += performance.now() - tSim;
       if (A.mode === 'host') Net.consumeInputs();
       var ev = drain(S);
       if (A.mode === 'host') {
@@ -917,20 +935,35 @@
     updateCamera(A.mode === 'menu' ? null : S, rdt);
     ctx.save();
     if (shake > 0.2) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    var t0 = performance.now();
     drawArena();
+    var t1 = performance.now();
     drawFighters(shown);
+    var t2 = performance.now();
     drawFx(shown);
+    var t3 = performance.now();
     ctx.restore();
     if (A.mode !== 'menu') { drawHud(S); drawAnnounce(); }
+    var t4 = performance.now();
+    prof.arena += t1 - t0; prof.fighters += t2 - t1; prof.fx += t3 - t2; prof.hud += t4 - t3; prof.n++;
     if (SHOW_FPS) {
       fpsN++;
-      if (ts - fpsT >= 1000) { fpsVal = Math.round(fpsN * 1000 / (ts - fpsT)); fpsN = 0; fpsT = ts; }
+      if (ts - fpsT >= 1000) {
+        fpsVal = Math.round(fpsN * 1000 / (ts - fpsT)); fpsN = 0; fpsT = ts;
+        // Average milliseconds per frame spent in each part, in our own code.
+        var k = prof.n || 1, r1 = function (v) { return Math.round(v / k * 10) / 10; };
+        profText = 'sim ' + r1(prof.sim) + ' bg ' + r1(prof.arena) + ' ppl ' + r1(prof.fighters) + ' fx ' + r1(prof.fx) + ' ui ' + r1(prof.hud);
+        prof = { sim: 0, arena: 0, fighters: 0, fx: 0, hud: 0, n: 0 };
+      }
       ctx.font = '700 11px -apple-system, system-ui, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(4, H - PAD_H - 18, 78, 15);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(2, H - PAD_H - 32, W - 4, 29);
       ctx.fillStyle = fpsVal >= 50 ? '#6dff7a' : fpsVal >= 30 ? '#ffd166' : '#ff3b3b';
-      ctx.fillText(fpsVal + ' fps · Q' + Q, 8, H - PAD_H - 7);
+      ctx.fillText(fpsVal + ' fps · Q' + Q, 6, H - PAD_H - 20);
+      ctx.font = '600 9px -apple-system, system-ui, sans-serif';
+      ctx.fillStyle = '#f1ecff';
+      ctx.fillText(profText, 6, H - PAD_H - 8);
     }
 
     var showSuper = !!me && A.mode !== 'menu' && S.phase === 'fight' && me.meter >= 100 && me.state !== 'ko';
