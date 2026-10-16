@@ -10,9 +10,6 @@
   var cv = $('c');
   var ctx = cv.getContext('2d');
   var W = 0, H = 0, PAD_H = 46, TOP = 0, vignette = null;
-  // The health bars sit at the bottom, just above the buttons: the watch's status bar at the top
-  // changes height, so nothing important goes up there.
-  function hudH(S) { return !S || A.mode === 'menu' ? 0 : S.fighters.length === 2 ? 28 : 44; }
   // Height of the watch's status bar (the clock), which sits over the top of the page.
   // Uses the safe area if the browser reports one, and at least 30px on watch-sized screens.
   var safeProbe = document.createElement('div');
@@ -352,9 +349,9 @@
     var rxv = -fz, rzv = fx, rl = Math.sqrt(rxv * rxv + rzv * rzv); rxv /= rl; rzv /= rl;
     var ux = -rzv * fy, uy = rzv * fx - rxv * fz, uz = rxv * fy; // up = right x forward
     basis = { f: [fx, fy, fz], r: [rxv, 0, rzv], u: [ux, uy, uz] };
-    var viewB = H - PAD_H - hudH(S);
-    FOCAL = Math.min(((viewB - TOP) / 2) / Math.tan(22 * Math.PI / 180), W * 1.1);
-    CX = W / 2; CY = TOP + (viewB - TOP) * 0.57;
+    var viewH = H - PAD_H;
+    FOCAL = Math.min(((viewH - TOP) / 2) / Math.tan(22 * Math.PI / 180), W * 1.1);
+    CX = W / 2; CY = TOP + (viewH - TOP) * 0.57;
   }
   function project(p) {
     var dx = p[0] - cam.x, dy = p[1] - cam.y, dz = p[2] - cam.z;
@@ -797,25 +794,22 @@
   }
   // Two fighters: bars either side of the timer. Three or four: timer on top, a 2x2 grid below.
   function drawHud(S) {
-    var n = S.fighters.length, two = n === 2, HH = hudH(S);
-    var base = H - PAD_H - HH, side = Math.max(8, W * 0.05), tw = 26;
-    var bw = (W - side * 2 - tw) / 2, rowH = two ? 0 : 20;
+    var top = TOP + 3, side = Math.max(10, W * 0.07), n = S.fighters.length;
+    var two = n === 2, tw = two ? 26 : 0, gap = two ? 0 : 6;
+    var bw = (W - side * 2 - tw - gap) / 2;
+    var y0 = two ? top : top + 16;
     var low = S.timer <= 10 && S.phase === 'fight';
-    // Dark strip behind the bars so they read over the arena.
-    var sg = ctx.createLinearGradient(0, base - 8, 0, base + HH);
-    sg.addColorStop(0, 'rgba(7,6,15,0)'); sg.addColorStop(0.35, 'rgba(7,6,15,0.75)'); sg.addColorStop(1, 'rgba(7,6,15,0.85)');
-    ctx.fillStyle = sg;
-    ctx.fillRect(0, base - 8, W, HH + 8);
-    // Timer between the two columns.
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(W / 2 - 13, base + HH / 2 - 11, 26, 20);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    if (two) ctx.rect(W / 2 - 13, top + 2, 26, 22); else ctx.rect(W / 2 - 12, top, 24, 15);
+    ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = low ? '#ff2d6f' : '#f1ecff';
-    ctx.font = '800 ' + (two ? 15 : 13) + 'px -apple-system, system-ui, sans-serif';
-    ctx.fillText(String(Math.ceil(S.timer)), W / 2, base + HH / 2 + (two ? 4 : 3));
+    ctx.font = '800 ' + (two ? 16 : 13) + 'px -apple-system, system-ui, sans-serif';
+    ctx.fillText(String(Math.ceil(S.timer)), W / 2, two ? top + 19 : top + 12);
     for (var i = 0; i < n; i++) {
       var f = S.fighters[i], col = i % 2, row = Math.floor(i / 2);
-      var x = col === 0 ? side : W - side - bw, y = base + 2 + row * rowH;
+      var x = col === 0 ? side : W - side - bw, y = y0 + row * (two ? 0 : 20);
       var tr = hudTrail[i] === undefined ? f.hp : hudTrail[i];
       hudTrail[i] = tr > f.hp ? Math.max(f.hp, tr - frameDt * 35) : f.hp;
       var gone = f.kind === 'gone';
@@ -824,11 +818,11 @@
       ctx.font = '700 ' + (two ? 10 : 8) + 'px -apple-system, system-ui, sans-serif';
       ctx.fillStyle = rgb(LOOKS[i].suit, 1);
       ctx.textAlign = col === 0 ? 'left' : 'right';
-      ctx.fillText(name, col === 0 ? x : x + bw, y + (two ? 8 : 7));
+      ctx.fillText(name, col === 0 ? x : x + bw, y + (two ? 9 : 7));
       var lowHp = f.hp < 30, pulse = lowHp ? 0.75 + 0.25 * Math.sin(Date.now() / 90) : 1;
-      bar(x, y + (two ? 11 : 9), bw, two ? 7 : 5, f.hp / 100, lowHp ? rgb([255, 59, 59], pulse) : '#ffc23d', hudTrail[i] / 100);
+      bar(x, y + (two ? 12 : 9), bw, two ? 7 : 5, f.hp / 100, lowHp ? rgb([255, 59, 59], pulse) : '#ffc23d', hudTrail[i] / 100);
       var fullM = f.meter >= 100;
-      bar(x, y + (two ? 20 : 15), bw * 0.7, 3, f.meter / 100, fullM ? rgb([255, 209, 102], 0.8 + 0.2 * Math.sin(Date.now() / 80)) : rgb(LOOKS[i].suit, 1));
+      bar(x, y + (two ? 21 : 15), bw * 0.7, 3, f.meter / 100, fullM ? rgb([255, 209, 102], 0.8 + 0.2 * Math.sin(Date.now() / 80)) : rgb(LOOKS[i].suit, 1));
       ctx.globalAlpha = 1;
     }
     var me = S.fighters[A.me];
@@ -837,9 +831,9 @@
       ctx.textAlign = 'center';
       ctx.lineWidth = 3;
       ctx.strokeStyle = OUTLINE;
-      ctx.strokeText(me.combo + ' HITS', W / 2, base - 10);
+      ctx.strokeText(me.combo + ' HITS', W / 2, y0 + (two ? 42 : 52));
       ctx.fillStyle = rgb(LOOKS[me.idx].suit, 1);
-      ctx.fillText(me.combo + ' HITS', W / 2, base - 10);
+      ctx.fillText(me.combo + ' HITS', W / 2, y0 + (two ? 42 : 52));
     }
   }
   function drawAnnounce() {
@@ -851,7 +845,7 @@
     var viewH = H - PAD_H, size = Math.min(W * 0.17, 40);
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(W / 2, TOP + (viewH - hudH(A.S) - TOP) * 0.5);
+    ctx.translate(W / 2, TOP + (viewH - TOP) * 0.5);
     ctx.scale(scale, scale);
     ctx.textAlign = 'center';
     ctx.font = '900 ' + size + 'px -apple-system, system-ui, sans-serif';
@@ -925,14 +919,13 @@
       ctx.font = '700 11px -apple-system, system-ui, sans-serif';
       ctx.textAlign = 'left';
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(4, H - PAD_H - hudH(S) - 26, 78, 15);
+      ctx.fillRect(4, H - PAD_H - 18, 78, 15);
       ctx.fillStyle = fpsVal >= 50 ? '#6dff7a' : fpsVal >= 30 ? '#ffd166' : '#ff3b3b';
-      ctx.fillText(fpsVal + ' fps' + (lowFx ? ' · low' : ''), 8, H - PAD_H - hudH(S) - 15);
+      ctx.fillText(fpsVal + ' fps' + (lowFx ? ' · low' : ''), 8, H - PAD_H - 7);
     }
 
     var showSuper = !!me && A.mode !== 'menu' && S.phase === 'fight' && me.meter >= 100 && me.state !== 'ko';
     if (superBtn.hidden === showSuper) superBtn.hidden = !showSuper;
-    if (showSuper) superBtn.style.bottom = (PAD_H + hudH(S) + 6) + 'px';
     var showOver = A.mode !== 'menu' && S.phase === 'over';
     if (overEl.hidden === showOver) {
       overEl.hidden = !showOver;
