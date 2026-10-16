@@ -33,12 +33,13 @@ Open the link on the watch (for example, by sending it to yourself in Messages a
 - **SUPER**: appears when your meter is full. Tap it to fire.
 - **Tap the arena**: jump.
 
-On the watch, the CPU is gentler and rounds last 60 seconds. Online play works on the watch too: it only needs WebSockets, not WebRTC. To force the full version on a small screen, add `?full` to the URL.
+On the watch, the CPU is gentler and rounds last 60 seconds. Online play works on the watch too: it needs only plain HTTP requests, not WebRTC or WebSockets. To force the full version on a small screen, add `?full` to the URL.
 
 ## Code
 
 - `sim.js`: rules, physics, CPU and rounds, shared by both versions so either can host a room.
-- `net.js`: online rooms. Messages go over a WebSocket to a free public MQTT broker (EMQX, HiveMQ or Mosquitto, picked by the room code) using a tiny built-in MQTT client, so no WebRTC and no server of our own. The host runs the simulation; guests send inputs and draw the host's snapshots.
+- `net.js`: online rooms. Everyone connects to a small relay (`relay/`, a Cloudflare Worker with one Durable Object per room): computers by WebSocket, the Apple Watch by HTTP long polling. The host runs the simulation; guests send inputs and draw the host's snapshots.
+- `relay/`: the relay. Deploy with `cd relay && npx wrangler deploy`, then put its URL in `RELAY` at the top of `net.js`. For local testing, run `npx wrangler dev` and open the game with `?relay=http://localhost:8787`.
 - `game.js`: the full version (three.js rendering, keyboard and gamepad input).
 - `watch.js`: the watch version (canvas rendering, touch controls).
 

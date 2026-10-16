@@ -1,0 +1,13 @@
+# Neon Brawl relay: passes messages between the players in a room.
+# Deploy with `npx wrangler deploy` from this folder.
+name = "neonbrawl-relay"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
