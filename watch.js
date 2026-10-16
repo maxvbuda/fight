@@ -9,13 +9,20 @@
 
   var cv = $('c');
   var ctx = cv.getContext('2d');
-  var W = 0, H = 0, PAD_H = 46, vignette = null;
+  var W = 0, H = 0, PAD_H = 46, TOP = 0, vignette = null;
+  // Height of the watch's status bar (the clock), which sits over the top of the page.
+  // Uses the safe area if the browser reports one, and at least 30px on watch-sized screens.
+  var safeProbe = document.createElement('div');
+  safeProbe.style.cssText = 'position:fixed;left:0;top:0;width:1px;visibility:hidden;pointer-events:none;height:env(safe-area-inset-top,0px)';
+  document.body.appendChild(safeProbe);
   function resize() {
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = window.innerWidth; H = window.innerHeight;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     cv.style.width = W + 'px'; cv.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    TOP = Math.max(safeProbe.offsetHeight || 0, Math.min(W, H) < 300 ? 30 : 0);
+    document.documentElement.style.setProperty('--top', TOP + 'px');
     // Dark corners, drawn once here and stamped on every frame.
     vignette = document.createElement('canvas');
     vignette.width = Math.max(1, Math.round(W / 2)); vignette.height = Math.max(1, Math.round(H / 2));
@@ -343,8 +350,8 @@
     var ux = -rzv * fy, uy = rzv * fx - rxv * fz, uz = rxv * fy; // up = right x forward
     basis = { f: [fx, fy, fz], r: [rxv, 0, rzv], u: [ux, uy, uz] };
     var viewH = H - PAD_H;
-    FOCAL = Math.min((viewH / 2) / Math.tan(22 * Math.PI / 180), W * 1.1);
-    CX = W / 2; CY = viewH * 0.55;
+    FOCAL = Math.min(((viewH - TOP) / 2) / Math.tan(22 * Math.PI / 180), W * 1.1);
+    CX = W / 2; CY = TOP + (viewH - TOP) * 0.57;
   }
   function project(p) {
     var dx = p[0] - cam.x, dy = p[1] - cam.y, dz = p[2] - cam.z;
@@ -787,7 +794,7 @@
   }
   // Two fighters: bars either side of the timer. Three or four: timer on top, a 2x2 grid below.
   function drawHud(S) {
-    var top = Math.max(6, H * 0.03), side = Math.max(10, W * 0.07), n = S.fighters.length;
+    var top = TOP + 3, side = Math.max(10, W * 0.07), n = S.fighters.length;
     var two = n === 2, tw = two ? 26 : 0, gap = two ? 0 : 6;
     var bw = (W - side * 2 - tw - gap) / 2;
     var y0 = two ? top : top + 16;
@@ -838,7 +845,7 @@
     var viewH = H - PAD_H, size = Math.min(W * 0.17, 40);
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(W / 2, viewH * 0.47);
+    ctx.translate(W / 2, TOP + (viewH - TOP) * 0.5);
     ctx.scale(scale, scale);
     ctx.textAlign = 'center';
     ctx.font = '900 ' + size + 'px -apple-system, system-ui, sans-serif';
