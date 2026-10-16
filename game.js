@@ -1005,7 +1005,7 @@ function consumeRemoteEdges() {
 const r3 = (n) => Math.round(n * 1000) / 1000;
 function snapFighter(f) {
   return [r3(f.pos.x), r3(f.pos.y), r3(f.pos.z), r3(f.root.rotation.y), r3(f.body.rotation.x), r3(f.body.position.y),
-    r3(f.hp), r3(f.meter), f.combo, f.stun > 0 ? 1 : 0, r3(Math.max(0, f.flash)), ...POSE_KEYS.map((k) => r3(f.pose[k]))];
+    r3(f.hp), r3(f.meter), f.combo, f.stun > 0 ? 1 : 0, r3(Math.max(0, f.flash)), ...POSE_KEYS.map((k) => r3(f.pose[k])), f.atk ? 1 : 0];
 }
 function sendSnapshot() {
   if (!Net.conn?.open) return;

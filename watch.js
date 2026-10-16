@@ -32,6 +32,12 @@
   function mv(A, v) {
     return [A[0] * v[0] + A[1] * v[1] + A[2] * v[2], A[3] * v[0] + A[4] * v[1] + A[5] * v[2], A[6] * v[0] + A[7] * v[1] + A[8] * v[2]];
   }
+  function lerpAngle(a, b, t) {
+    var d = (b - a) % (Math.PI * 2);
+    if (d > Math.PI) d -= Math.PI * 2;
+    if (d < -Math.PI) d += Math.PI * 2;
+    return a + d * t;
+  }
   function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
 
   // ---------- Fighters ----------
@@ -61,7 +67,7 @@
     f.face = x < 0 ? 1 : -1; f.yaw = f.face * Math.PI / 2;
     f.hp = 100; f.state = 'idle'; f.atk = null; f.stun = 0; f.combo = 0; f.flash = 0;
     f.lastPunch = 'cross'; f.punchT = 0; f.holdBack = false;
-    f.bodyRx = 0; f.bodyY = 0;
+    f.bodyRx = 0; f.bodyY = 0; f.z = 0; f.attacking = false;
   }
   var F = [makeFighter(0), makeFighter(1)];
 
@@ -78,7 +84,7 @@
   function startAttack(f, name) {
     f.atk = { name: name, t: 0, hit: false };
     f.state = 'attack';
-    if (name === 'super') { f.meter = 0; if (f.idx === 0) superBuf = 0; wave(f.x + f.face * 0.5, 1.3, f.look.suit); }
+    if (name === 'super') { f.meter = 0; if (f.idx === 0) superBuf = 0; wave(f.x + f.face * 0.5, 1.3, 0, f.look.suit); }
   }
 
   function updateFighter(f, dt, inp, o) {
@@ -146,7 +152,7 @@
     var hx = att.x + (def.x - att.x) * 0.7, hy = Math.max(att.y, def.y) + m.h;
     if (blocked) {
       def.state = 'block';
-      burst(hx, hy, [159, 232, 255], 8, 4);
+      burst(hx, hy, 0, [159, 232, 255], 8, 4);
       G.hitstop = 0.035;
     } else {
       def.flash = 0.12;
@@ -154,7 +160,7 @@
       if (!(def.atk && def.atk.name === 'super')) { def.stun = m.stun; def.atk = null; def.state = 'hit'; }
       if (m.launch || def.hp <= 0) def.vy = 6.2;
       var big = m === MOVES.super;
-      burst(hx, hy, att.look.suit, big ? 36 : m === MOVES.kick ? 18 : 12, big ? 9 : 6);
+      burst(hx, hy, 0, att.look.suit, big ? 36 : m === MOVES.kick ? 18 : 12, big ? 9 : 6);
       shake = Math.max(shake, big ? 7 : m === MOVES.kick ? 3.5 : 2);
       G.hitstop = big ? 0.18 : m === MOVES.kick ? 0.08 : 0.055;
     }
@@ -300,22 +306,21 @@
   function onArenaTap(e) {
     if (G.phase === 'menu') return;
     e.preventDefault();
-    if (G.phase === 'over') { menuOpen(); return; }
+    if (G.phase === 'over') return;
     taps.jump = true;
   }
   cv.addEventListener(window.PointerEvent ? 'pointerdown' : 'touchstart', onArenaTap);
-  document.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (G.phase !== 'menu') e.preventDefault(); }, { passive: false });
 
   var keys = {};
   window.addEventListener('keydown', function (e) {
-    if (e.repeat) return;
+    if (e.repeat || (e.target && e.target.tagName === 'INPUT')) return;
     var c = e.code || e.key;
     keys[c] = true;
     if (c === 'KeyJ' || c === 'KeyZ') pressAttack('P');
     if (c === 'KeyK' || c === 'KeyX') pressAttack('K');
     if (c === 'Space' || c === 'KeyW' || c === 'ArrowUp') taps.jump = true;
     if (c === 'KeyU') superBuf = 0.5;
-    if (c === 'Enter' && G.phase === 'over') menuOpen();
   });
   window.addEventListener('keyup', function (e) { keys[e.code || e.key] = false; });
 
@@ -334,6 +339,8 @@
     announce(G.wins[0] === 1 && G.wins[1] === 1 ? 'FINAL' : 'ROUND ' + G.round);
   }
   function startMatch() {
+    closeNet();
+    G.mode = 'cpu';
     G.wins = [0, 0]; G.round = 1; F[0].meter = F[1].meter = 0;
     document.getElementById('menu').hidden = true;
     document.getElementById('pad').hidden = false;
@@ -343,6 +350,8 @@
     G.phase = 'menu';
     reset(F[0], -2.2); reset(F[1], 2.2);
     ann.text = '';
+    G.mode = 'cpu';
+    overEl.hidden = true;
     document.getElementById('menu').hidden = false;
     document.getElementById('pad').hidden = true;
   }
@@ -382,7 +391,7 @@
         var w = F[G.winner];
         if (w && w.state !== 'ko') { w.atk = null; w.stun = 0; w.state = 'win'; }
         var over = G.wins[0] >= 2 || G.wins[1] >= 2;
-        if (over) announce(G.winner === 0 ? 'YOU WIN' : 'YOU LOSE', true, 'Tap for menu');
+        if (over) announce(G.winner === 0 ? 'YOU WIN' : 'YOU LOSE', true);
         else announce(w ? w.name + ' WINS' : 'DRAW', true, w && w.hp >= 100 ? 'PERFECT' : '');
       }
       if (G.phaseT > 4) {
@@ -394,16 +403,16 @@
 
   // ---------- Effects ----------
   var sparks = [], waves = [];
-  function burst(x, y, col, n, speed) {
+  function burst(x, y, z, col, n, speed) {
     for (var i = 0; i < n; i++) {
       var vx = Math.random() - 0.5, vy = Math.random() - 0.3, vz = Math.random() - 0.5;
       var l = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1, s = speed * (0.4 + Math.random()) / l;
       var life = 0.25 + Math.random() * 0.35;
-      sparks.push({ p: [x, y, 0], v: [vx * s, vy * s, vz * s], life: life, max: life, c: i % 3 === 0 ? [255, 255, 255] : col });
+      sparks.push({ p: [x, y, z], v: [vx * s, vy * s, vz * s], life: life, max: life, c: i % 3 === 0 ? [255, 255, 255] : col });
     }
     if (sparks.length > 160) sparks.splice(0, sparks.length - 160);
   }
-  function wave(x, y, col) { waves.push({ x: x, y: y, t: 0, c: col }); }
+  function wave(x, y, z, col) { waves.push({ x: x, y: y, z: z, t: 0, c: col }); }
   function updateFx(dt) {
     for (var i = sparks.length - 1; i >= 0; i--) {
       var s = sparks[i];
@@ -420,18 +429,29 @@
   // ---------- Camera and projection ----------
   var cam = { x: 0, y: 2.1, z: 6.5, tx: 0, ty: 1.0, tz: 0 };
   var basis = null, FOCAL = 1, CX = 0, CY = 0;
+  var camSide = [0, 0, 1];
   function updateCamera(dt) {
-    var mid, sep;
     if (G.phase === 'menu') {
       var t = Date.now() / 1000;
-      cam.x = Math.sin(t * 0.25) * 4; cam.z = 6.5 + Math.cos(t * 0.25) * 0.8; cam.tx = 0;
+      cam.x = Math.sin(t * 0.25) * 4; cam.z = 6.5 + Math.cos(t * 0.25) * 0.8; cam.tx = 0; cam.tz = 0;
+      camSide = [0, 0, 1];
     } else {
-      mid = (F[0].x + F[1].x) / 2; sep = Math.abs(F[0].x - F[1].x);
-      var k = damp(6, dt);
-      cam.x += (mid - cam.x) * k;
-      cam.tx += (mid - cam.tx) * k;
-      cam.z += (clamp(4.4 + sep * 0.9, 5.2, 9) - cam.z) * k;
-      cam.y += (2.0 + Math.max(F[0].y, F[1].y) * 0.3 - cam.y) * k;
+      var a = F[0], b = F[1];
+      var mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, dx = b.x - a.x, dz = b.z - a.z;
+      var sep = Math.sqrt(dx * dx + dz * dz) || 1;
+      // Side-on view of the fight; stays on the same side if the fighters swap places.
+      var px = -dz / sep, pz = dx / sep;
+      if (px * camSide[0] + pz * camSide[2] < 0) { px = -px; pz = -pz; }
+      var ks = damp(4, dt);
+      camSide[0] += (px - camSide[0]) * ks; camSide[2] += (pz - camSide[2]) * ks;
+      var sl = Math.sqrt(camSide[0] * camSide[0] + camSide[2] * camSide[2]) || 1;
+      camSide[0] /= sl; camSide[2] /= sl;
+      var dist = clamp(4.4 + sep * 0.9, 5.2, 9), k = damp(6, dt);
+      cam.x += (mx + camSide[0] * dist - cam.x) * k;
+      cam.z += (mz + camSide[2] * dist - cam.z) * k;
+      cam.y += (2.0 + Math.max(a.y, b.y) * 0.3 - cam.y) * k;
+      cam.tx += (mx - cam.tx) * k;
+      cam.tz += (mz - cam.tz) * k;
     }
     var fx = cam.tx - cam.x, fy = cam.ty - cam.y, fz = cam.tz - cam.z;
     var fl = Math.sqrt(fx * fx + fy * fy + fz * fz); fx /= fl; fy /= fl; fz /= fl;
@@ -460,13 +480,13 @@
     var p = f.pose, L = f.look;
     var flash = Math.max(0, f.flash) / 0.12;
     var suit = mix(L.suit, flash), glove = f.meter >= 100 ? mix(L.suit, 0.35 + 0.3 * Math.sin(f.clock * 12)) : L.suit;
-    var R0 = mm(ry(f.yaw), rx(f.bodyRx)), O = [f.x, f.y + f.bodyY, 0];
+    var R0 = mm(ry(f.yaw), rx(f.bodyRx)), O = [f.x, f.y + f.bodyY, f.z];
     function child(R, o, off, rot) { return { R: rot ? mm(R, rot) : R, o: add(o, mv(R, off)) }; }
     function at(j, off) { return add(j.o, mv(j.R, off)); }
     var hips = child(R0, O, [0, 1 + p.hy, 0]);
     var spine = child(hips.R, hips.o, [0, 0.06, 0], mm(rx(p.sx), ry(p.sy)));
     var neck = child(spine.R, spine.o, [0, 0.6, 0], mm(rx(p.nx), ry(-p.sy * 0.6)));
-    var center = project([f.x, f.y + 1, 0]);
+    var center = project([f.x, f.y + 1, f.z]);
     function seg(a, b, r, col) { out.push({ a: a, b: b, r: r, c: col, cz: center ? center.z : 0 }); }
     seg(hips.o, at(spine, [0, 0.42, 0]), 0.21, suit);
     seg(at(spine, [0.2, 0.03, 0]), at(spine, [-0.2, 0.03, 0]), 0.045, L.trim);
@@ -515,7 +535,7 @@
       if (fill) { ctx.fillStyle = fill; ctx.fill(); }
       if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = w; ctx.stroke(); }
     }
-    ring(7.2, '#15122a', '#ff2d6f', 2);
+    ring(G.mode === 'online' ? 9.2 : 7.2, '#15122a', '#ff2d6f', 2);
     ring(4.6, null, 'rgba(45,226,255,0.35)', 1);
     ring(1.2, null, 'rgba(255,209,102,0.45)', 1);
   }
@@ -525,7 +545,7 @@
     segments(F[0], segs); segments(F[1], segs);
     // shadows
     for (var s = 0; s < 2; s++) {
-      var c = project([F[s].x, 0, 0]);
+      var c = project([F[s].x, 0, F[s].z]);
       if (!c) continue;
       var sc = FOCAL / c.z;
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -563,7 +583,7 @@
       ctx.fillRect(q.x - r, q.y - r, r * 2, r * 2);
     }
     for (var j = 0; j < waves.length; j++) {
-      var w = waves[j], c = project([w.x, w.y, 0]);
+      var w = waves[j], c = project([w.x, w.y, w.z]);
       if (!c) continue;
       var k = w.t / 0.45;
       ctx.strokeStyle = rgb(w.c, 1);
@@ -597,7 +617,7 @@
       ctx.font = '700 10px -apple-system, system-ui, sans-serif';
       ctx.fillStyle = rgb(f.look.suit, 1);
       ctx.textAlign = i === 0 ? 'left' : 'right';
-      ctx.fillText(f.name + (G.wins[i] ? ' ' + new Array(G.wins[i] + 1).join('◆') : ''), i === 0 ? x : x + bw, top + 9);
+      ctx.fillText(f.name + (G.mode === 'online' && i === 1 ? '·YOU' : '') + (G.wins[i] ? ' ' + new Array(G.wins[i] + 1).join('◆') : ''), i === 0 ? x : x + bw, top + 9);
     }
     ctx.textAlign = 'center';
     ctx.fillStyle = G.timer <= 10 && G.phase === 'fight' ? '#ff2d6f' : '#f1ecff';
@@ -625,6 +645,8 @@
     ctx.scale(scale, scale);
     ctx.textAlign = 'center';
     ctx.font = '900 ' + size + 'px -apple-system, system-ui, sans-serif';
+    var tw = ctx.measureText(ann.text).width;
+    if (tw > W * 0.9) ctx.font = '900 ' + Math.floor(size * W * 0.9 / tw) + 'px -apple-system, system-ui, sans-serif';
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'rgba(0,0,0,0.7)';
     ctx.strokeText(ann.text, 0, 0);
@@ -638,18 +660,143 @@
     ctx.restore();
   }
 
+  // ---------- Online: join a room hosted from the full game, as player 2 ----------
+  // The host simulates the fight; the watch sends inputs and draws the host's snapshots.
+  var PREFIX = 'neonbrawl-v1-';
+  var Net = { peer: null, conn: null, snap: null, counts: [0, 0, 0, 0], timer: 0 };
+  var netMsgEl = document.getElementById('netMsg');
+  var overEl = document.getElementById('over');
+  function netMsg(t) { netMsgEl.textContent = t; }
+  function myIndex() { return G.mode === 'online' ? 1 : 0; }
+
+  function closeNet() {
+    clearTimeout(Net.timer);
+    try { if (Net.conn) Net.conn.close(); } catch (e) {}
+    try { if (Net.peer) Net.peer.destroy(); } catch (e) {}
+    Net.peer = Net.conn = Net.snap = null;
+  }
+  function loadPeer(cb) {
+    if (window.Peer) { cb(); return; }
+    var sc = document.createElement('script');
+    sc.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    sc.onload = cb;
+    sc.onerror = function () { netMsg('Online play could not load. Check that your watch is online.'); };
+    document.head.appendChild(sc);
+  }
+  function joinRoom(code) {
+    code = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== 5) { netMsg('Enter the 5-character room code shown on the host screen.'); return; }
+    if (!window.RTCPeerConnection) { netMsg("This browser can't make the peer-to-peer connection online play needs."); return; }
+    netMsg('Connecting…');
+    loadPeer(function () {
+      closeNet();
+      Net.timer = setTimeout(function () { if (G.mode !== 'online') { closeNet(); netMsg('Could not reach room ' + code + '. Check the code and try again.'); } }, 15000);
+      var peer = Net.peer = new window.Peer();
+      peer.on('open', function () {
+        var conn = Net.conn = peer.connect(PREFIX + code, { reliable: true });
+        conn.on('open', function () {
+          clearTimeout(Net.timer);
+          G.mode = 'online'; G.phase = 'intro'; G.wins = [0, 0];
+          Net.counts = [0, 0, 0, 0]; Net.snap = null;
+          reset(F[0], -2.4); reset(F[1], 2.4);
+          document.getElementById('menu').hidden = true;
+          document.getElementById('pad').hidden = false;
+          netMsg('');
+        });
+        conn.on('data', onNetData);
+        conn.on('close', lost);
+        conn.on('error', lost);
+      });
+      peer.on('error', function (e) {
+        clearTimeout(Net.timer);
+        netMsg(e.type === 'peer-unavailable' ? 'No open room with code ' + code + '.' : 'Online error: ' + e.type + '. Try again.');
+      });
+    });
+  }
+  function lost() {
+    if (G.mode !== 'online') return;
+    closeNet();
+    menuOpen();
+    netMsg('Connection to the host was lost.');
+  }
+
+  function hexRgb(h) { return [(h >> 16) & 255, (h >> 8) & 255, h & 255]; }
+  function onNetData(msg) {
+    if (!msg || msg.t !== 's') return;
+    Net.snap = msg;
+    for (var i = 0; i < msg.e.length; i++) {
+      var type = msg.e[i][0], a = msg.e[i][1];
+      if (type === 'burst') burst(a[0], a[1], a[2], hexRgb(a[3]), Math.min(a[4], 30), a[5]);
+      else if (type === 'wave') wave(a[0], a[1], a[2], hexRgb(a[3]));
+      else if (type === 'shake') shake = Math.max(shake, a * 15);
+      else if (type === 'announce') {
+        var text = a[0];
+        if (/VICTORY/.test(text)) text = text.indexOf(F[1].name) === 0 ? 'YOU WIN' : 'YOU LOSE';
+        else if (/FINAL/.test(text)) text = 'FINAL';
+        else text = text.replace(/\n/g, ' ');
+        var sub = /REMATCH/.test(a[2] || '') ? '' : (a[2] || '');
+        announce(text, a[1] === 'stay' || a[1] === 'ko', sub);
+      }
+    }
+  }
+  function guestApply(dt) {
+    var s = Net.snap;
+    if (!s) return;
+    G.phase = s.g[0]; G.timer = s.g[1]; G.round = s.g[2]; G.wins[0] = s.g[3]; G.wins[1] = s.g[4];
+    var k = damp(30, dt);
+    for (var i = 0; i < 2; i++) {
+      var d = s.f[i], f = F[i];
+      f.x += (d[0] - f.x) * k; f.y += (d[1] - f.y) * k; f.z += (d[2] - f.z) * k;
+      f.yaw = lerpAngle(f.yaw, d[3], k);
+      f.bodyRx += (d[4] - f.bodyRx) * k; f.bodyY += (d[5] - f.bodyY) * k;
+      f.hp = d[6]; f.meter = d[7]; f.combo = d[8]; f.stun = d[9] ? 1 : 0; f.flash = d[10];
+      for (var j = 0; j < KEYS.length; j++) f.pose[KEYS[j]] += (d[11 + j] - f.pose[KEYS[j]]) * k;
+      f.attacking = !!d[11 + KEYS.length];
+      f.clock += dt;
+    }
+  }
+  function onlineSend() {
+    if (!Net.conn || !Net.conn.open || !basis) return;
+    var me = F[1], opp = F[0];
+    var l = held.L || keys.ArrowLeft || keys.KeyA, r = held.R || keys.ArrowRight || keys.KeyD;
+    var s = (r ? 1 : 0) - (l ? 1 : 0);
+    var mx = basis.r[0] * s, mz = basis.r[2] * s; // screen right in world space
+    var dx = opp.x - me.x, dz = opp.z - me.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+    var block = (mx * dx + mz * dz) / d < -0.1 && opp.attacking && d < 2.6; // hold back to block
+    if (taps.super) superBuf = 0.5;
+    if (taps.jump) Net.counts[0]++;
+    if (taps.punch && !taps.super) Net.counts[1]++;
+    if (taps.kick && !taps.super) Net.counts[2]++;
+    if (superBuf > 0 && me.meter >= 100) Net.counts[3]++;
+    Net.conn.send({ t: 'in', mx: block ? 0 : mx, mz: block ? 0 : mz, block: block, c: Net.counts.slice() });
+  }
+
+  document.getElementById('joinForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var inp = document.getElementById('code');
+    inp.blur();
+    joinRoom(inp.value);
+  });
+  bindButton('bAgain', function () {
+    if (G.mode === 'online') { if (Net.conn && Net.conn.open) Net.conn.send({ t: 'rematch' }); }
+    else startMatch();
+  });
+  bindButton('bLeave', function () { closeNet(); menuOpen(); netMsg(''); });
+
   // ---------- Loop ----------
   var last = 0;
   function frame(ts) {
     window.requestAnimationFrame(frame);
     var rdt = last ? Math.min((ts - last) / 1000, 1 / 20) : 1 / 60;
     last = ts;
-    if (G.phase === 'menu') {
+    var me = F[myIndex()];
+    if (G.mode === 'online') { onlineSend(); guestApply(rdt); }
+    else if (G.phase === 'menu') {
       updateFighter(F[0], rdt, NONE, F[1]);
       updateFighter(F[1], rdt, NONE, F[0]);
     } else step(rdt);
     taps.punch = taps.kick = taps.jump = taps.super = false;
-    if (superBuf > 0 && F[0].stun <= 0) superBuf -= rdt; // wait out hitstun, then fire
+    if (superBuf > 0 && me.stun <= 0) superBuf -= rdt; // wait out hitstun, then fire
     updateFx(rdt);
     updateCamera(rdt);
     ctx.save();
@@ -659,10 +806,12 @@
     drawFx();
     ctx.restore();
     if (G.phase !== 'menu') { drawHud(); drawAnnounce(); }
-    var showSuper = G.phase === 'fight' && F[0].meter >= 100;
+    var showSuper = G.phase === 'fight' && me.meter >= 100;
     if (superBtn.hidden === showSuper) superBtn.hidden = !showSuper;
+    var showOver = G.phase === 'over';
+    if (overEl.hidden === showOver) overEl.hidden = !showOver;
   }
   window.requestAnimationFrame(frame);
 
-  window.NBW = { G: G, F: F };
+  window.NBW = { G: G, F: F, Net: Net };
 })();

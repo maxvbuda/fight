@@ -12,7 +12,9 @@ A 3D fighting game that runs in the browser, built with [three.js](https://three
 
 ## Apple Watch
 
-Open the link on an Apple Watch (for example, by sending it to yourself in Messages and tapping it). Small screens and browsers without WebGL load `watch.html`, a lightweight edition that draws the same 3D fighters on a 2D canvas. Play there is against the CPU only:
+Open the link on an Apple Watch (for example, by sending it to yourself in Messages and tapping it). Small screens and browsers without WebGL load `watch.html`, a lightweight edition that draws the same 3D fighters on a 2D canvas. You can fight the CPU, or join an online room that a friend hosts from the full game. Type the room code on the watch menu and tap Join. You play as VOLT. Online play on the watch needs a browser that supports WebRTC.
+
+Controls:
 
 - **◀ ▶**: move. Holding away from your opponent blocks.
 - **P / K**: punch and kick.
