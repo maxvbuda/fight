@@ -10,8 +10,13 @@
   var cv = $('c');
   var ctx = cv.getContext('2d');
   var W = 0, H = 0, PAD_H = 46, vignette = null;
+  // Graphics quality, picked automatically (see frame()) and remembered for next time:
+  // 3 full, 2 drops to 75% resolution and the vignette, 1 also drops the floor reflection,
+  // spotlight beams and highlights, 0 drops to 50% resolution, the crowd and glow halos.
+  var Q = 3;
+  try { var savedQ = localStorage.getItem('nbQuality'); if (/^[0-3]$/.test(savedQ || '')) Q = +savedQ; } catch (e) {}
   function resize() {
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var dpr = Math.min(window.devicePixelRatio || 1, Q >= 3 ? 2 : Q >= 1 ? 1.5 : 1);
     W = window.innerWidth; H = window.innerHeight;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     cv.style.width = W + 'px'; cv.style.height = H + 'px';
@@ -423,7 +428,7 @@
   }
 
   // ---------- Drawing ----------
-  var lowFx = false, frameDt = 1 / 60, avgDt = 1 / 60, slowFor = 0;
+  var lowFx = Q < 2, frameDt = 1 / 60, qT = 0, qN = 0, qWarm = 2;
   function ringPath(r, cx, cz, n) {
     ctx.beginPath();
     var first = true;
@@ -468,31 +473,33 @@
     }
     // Crowd silhouettes, bouncing harder after big hits, with camera flashes.
     hype *= Math.exp(-1.2 * frameDt);
-    ctx.fillStyle = '#1b1430';
-    ctx.beginPath();
-    var heads = [];
-    for (i = 0; i < crowd.length; i++) {
-      var m = crowd[i], bob = Math.max(0, Math.sin(now * (5 + hype * 6) + m.ph)) * (0.05 + hype * 0.3);
-      var mx = Math.cos(m.a) * m.r, mz = Math.sin(m.a) * m.r, base = (m.r - 12.4) * 0.6;
-      var hd = project([mx, base + 1.25 * m.s + bob, mz]), ft = project([mx, base - 0.4, mz]);
-      if (!hd || !ft || hd.z < 5) continue;
-      var hr = 0.17 * m.s * FOCAL / hd.z;
-      ctx.moveTo(hd.x + hr, hd.y);
-      ctx.arc(hd.x, hd.y, hr, 0, Math.PI * 2);
-      ctx.rect(hd.x - hr * 1.5, hd.y + hr * 0.9, hr * 3, ft.y - hd.y);
-      heads.push(hd);
+    if (Q >= 1) {
+      ctx.fillStyle = '#1b1430';
+      ctx.beginPath();
+      var heads = [];
+      for (i = 0; i < crowd.length; i++) {
+        var m = crowd[i], bob = Math.max(0, Math.sin(now * (5 + hype * 6) + m.ph)) * (0.05 + hype * 0.3);
+        var mx = Math.cos(m.a) * m.r, mz = Math.sin(m.a) * m.r, base = (m.r - 12.4) * 0.6;
+        var hd = project([mx, base + 1.25 * m.s + bob, mz]), ft = project([mx, base - 0.4, mz]);
+        if (!hd || !ft || hd.z < 5) continue;
+        var hr = 0.17 * m.s * FOCAL / hd.z;
+        ctx.moveTo(hd.x + hr, hd.y);
+        ctx.arc(hd.x, hd.y, hr, 0, Math.PI * 2);
+        ctx.rect(hd.x - hr * 1.5, hd.y + hr * 0.9, hr * 3, ft.y - hd.y);
+        heads.push(hd);
+      }
+      ctx.fill();
+      if (heads.length && Math.random() < 0.1 + hype * 0.5) camFlashes.push({ q: heads[(Math.random() * heads.length) | 0], t: 0.09 });
+      ctx.fillStyle = '#fff';
+      for (i = camFlashes.length - 1; i >= 0; i--) {
+        var cf = camFlashes[i];
+        cf.t -= frameDt;
+        if (cf.t <= 0) { camFlashes.splice(i, 1); continue; }
+        ctx.globalAlpha = cf.t / 0.09;
+        ctx.beginPath(); ctx.arc(cf.q.x, cf.q.y, 2, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.fill();
-    if (heads.length && Math.random() < 0.1 + hype * 0.5) camFlashes.push({ q: heads[(Math.random() * heads.length) | 0], t: 0.09 });
-    ctx.fillStyle = '#fff';
-    for (i = camFlashes.length - 1; i >= 0; i--) {
-      var cf = camFlashes[i];
-      cf.t -= frameDt;
-      if (cf.t <= 0) { camFlashes.splice(i, 1); continue; }
-      ctx.globalAlpha = cf.t / 0.09;
-      ctx.beginPath(); ctx.arc(cf.q.x, cf.q.y, 2, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
     // Floor with a soft spotlight in the middle, spokes and rings.
     var c = project([0, 0, 0]);
     ringPath(9.2);
@@ -588,7 +595,7 @@
         ctx.globalAlpha = 1;
       }
     }
-    if (full) {
+    if (full && Q >= 1) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.3;
       for (j = 0; j < drawn.length; j++) if (drawn[j].g) { ctx.strokeStyle = rgb(drawn[j].c, 1); line(drawn[j], drawn[j].w * 2.4, 0, 0); }
@@ -758,7 +765,7 @@
       ctx.beginPath(); ctx.arc(q.x, q.y, (0.12 + pk * 0.25) * FOCAL / q.z, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
-    if (vignette) ctx.drawImage(vignette, 0, 0, W, H);
+    if (vignette && Q >= 3) ctx.drawImage(vignette, 0, 0, W, H);
     if (screenFlash > 0.01) {
       ctx.fillStyle = '#fff';
       ctx.globalAlpha = screenFlash;
@@ -866,11 +873,20 @@
     var rdt = last ? Math.min((ts - last) / 1000, 1 / 20) : 1 / 60;
     last = ts;
     var S = A.S;
-    // If the watch can't keep up (under ~26 fps for 2 s), drop the reflection, beams and highlights.
     frameDt = rdt;
-    avgDt += (rdt - avgDt) * 0.05;
-    slowFor = avgDt > 1 / 26 ? slowFor + rdt : 0;
-    if (slowFor > 2) lowFx = true;
+    // Step the quality down while the watch runs under ~50 fps (checked every 1.5 s, after a
+    // 2 s settle after any change).
+    if (qWarm > 0) qWarm -= rdt;
+    else if (Q > 0) {
+      qN++; qT += rdt;
+      if (qT >= 1.5) {
+        if (qN / qT < 50) {
+          Q--; lowFx = Q < 2; resize(); qWarm = 2;
+          try { localStorage.setItem('nbQuality', String(Q)); } catch (e) {}
+        }
+        qN = 0; qT = 0;
+      }
+    }
 
     if (A.mode === 'menu') {
       Sim.idle(A.menuS, rdt);
@@ -914,7 +930,7 @@
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(4, H - PAD_H - 18, 78, 15);
       ctx.fillStyle = fpsVal >= 50 ? '#6dff7a' : fpsVal >= 30 ? '#ffd166' : '#ff3b3b';
-      ctx.fillText(fpsVal + ' fps' + (lowFx ? ' · low' : ''), 8, H - PAD_H - 7);
+      ctx.fillText(fpsVal + ' fps · Q' + Q, 8, H - PAD_H - 7);
     }
 
     var showSuper = !!me && A.mode !== 'menu' && S.phase === 'fight' && me.meter >= 100 && me.state !== 'ko';
