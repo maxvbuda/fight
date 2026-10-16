@@ -2,6 +2,8 @@
 # Deploy with `npx wrangler deploy` from this folder.
 name = "neonbrawl-relay"
 main = "src/index.js"
+# The account the relay was claimed into, so deploys update the same workers.dev address.
+account_id = "45fdbb3b025373f7f53c54890e5fb957"
 compatibility_date = "2025-09-01"
 
 [[durable_objects.bindings]]
