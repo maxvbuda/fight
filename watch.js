@@ -54,7 +54,7 @@
   function announce(text, stay, sub) { ann.text = text; ann.sub = sub || ''; ann.t = 0; ann.stay = !!stay; }
 
   // ---------- Effects ----------
-  var sparks = [], waves = [];
+  var sparks = [], waves = [], flashes = [];
   function burst(x, y, z, col, n, speed) {
     n = Math.min(n, 30);
     for (var i = 0; i < n; i++) {
@@ -64,6 +64,7 @@
       sparks.push({ p: [x, y, z], v: [vx * s, vy * s, vz * s], life: life, max: life, c: i % 3 === 0 ? [255, 255, 255] : col });
     }
     if (sparks.length > 160) sparks.splice(0, sparks.length - 160);
+    flashes.push({ p: [x, y, z], t: 0, max: n >= 40 ? 0.22 : 0.12, size: n >= 40 ? 1.6 : n >= 12 ? 0.8 : 0.45, c: col });
   }
   function runEvent(type, a) {
     if (type === 'burst') burst(a[0], a[1], a[2], hexRgb(a[3]), a[4], a[5]);
@@ -93,6 +94,7 @@
       s.p[0] += s.v[0] * dt; s.p[1] += s.v[1] * dt; s.p[2] += s.v[2] * dt;
     }
     for (var j = waves.length - 1; j >= 0; j--) { waves[j].t += dt; if (waves[j].t > 0.45) waves.splice(j, 1); }
+    for (var k = flashes.length - 1; k >= 0; k--) { flashes[k].t += dt; if (flashes[k].t > flashes[k].max) flashes.splice(k, 1); }
     shake *= Math.exp(-9 * dt);
     ann.t += dt;
   }
@@ -371,65 +373,117 @@
   }
 
   // ---------- Drawing ----------
+  function ringPath(r, cx, cz, n) {
+    ctx.beginPath();
+    var first = true;
+    n = n || 48;
+    for (var i = 0; i <= n; i++) {
+      var a = i / n * Math.PI * 2, q = project([(cx || 0) + Math.cos(a) * r, 0, (cz || 0) + Math.sin(a) * r]);
+      if (!q) { first = true; continue; }
+      if (first) { ctx.moveTo(q.x, q.y); first = false; } else ctx.lineTo(q.x, q.y);
+    }
+  }
+  // Neon line: a wide faint stroke under a thin bright one reads as a glow, without costly blur.
+  function neon(col, w) {
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.25; ctx.lineWidth = w * 4; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.lineWidth = w; ctx.stroke();
+  }
   function drawArena() {
     var viewH = H - PAD_H;
+    // Horizon height on screen, from the camera's tilt.
+    var fl = Math.sqrt(basis.f[0] * basis.f[0] + basis.f[2] * basis.f[2]) || 1;
+    var hy = clamp(CY - FOCAL * (basis.f[0] * basis.u[0] + basis.f[2] * basis.u[2]) / (fl * fl), -viewH, viewH * 2);
     var g = ctx.createLinearGradient(0, 0, 0, viewH);
-    g.addColorStop(0, '#0d0a1e'); g.addColorStop(1, '#07060f');
+    g.addColorStop(0, '#040309'); g.addColorStop(clamp(hy / viewH, 0.05, 0.95), '#2a0f3a'); g.addColorStop(1, '#07060f');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+    var hg = ctx.createLinearGradient(0, hy - 26, 0, hy + 6);
+    hg.addColorStop(0, 'rgba(255,45,111,0)'); hg.addColorStop(0.7, 'rgba(255,45,111,0.22)'); hg.addColorStop(1, 'rgba(45,226,255,0.12)');
+    ctx.fillStyle = hg;
+    ctx.fillRect(0, hy - 26, W, 32);
+    ctx.lineCap = 'round';
     for (var i = 0; i < 10; i++) {
       var a = i / 10 * Math.PI * 2, px = Math.cos(a) * 14, pz = Math.sin(a) * 14;
       var b = project([px, 0, pz]), t = project([px, 7, pz]);
       if (!b || !t) continue;
-      ctx.strokeStyle = i % 2 ? 'rgba(45,226,255,0.55)' : 'rgba(255,45,111,0.55)';
-      ctx.lineWidth = Math.max(1, 0.12 * FOCAL / b.z);
-      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(t.x, t.y);
+      neon(i % 2 ? '#2de2ff' : '#ff2d6f', Math.max(1, 0.08 * FOCAL / b.z));
     }
-    function ring(r, fill, stroke, w) {
-      ctx.beginPath();
-      var first = true;
-      for (var i = 0; i <= 48; i++) {
-        var a = i / 48 * Math.PI * 2, q = project([Math.cos(a) * r, 0, Math.sin(a) * r]);
-        if (!q) { first = true; continue; }
-        if (first) { ctx.moveTo(q.x, q.y); first = false; } else ctx.lineTo(q.x, q.y);
-      }
-      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = w; ctx.stroke(); }
-    }
-    ring(9.2, '#15122a', '#ff2d6f', 2);
-    ring(6, null, 'rgba(45,226,255,0.35)', 1);
-    ring(1.8, null, 'rgba(255,209,102,0.45)', 1);
-  }
-
-  function drawFighters(S) {
-    var segs = [], i;
-    for (i = 0; i < S.fighters.length; i++) segments(S.fighters[i], segs);
-    for (i = 0; i < S.fighters.length; i++) {
-      var f = S.fighters[i], c = project([f.x, 0, f.z]);
-      if (!c) continue;
-      var sc = FOCAL / c.z;
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.beginPath();
-      ctx.ellipse(c.x, c.y, 0.45 * sc / (1 + f.y * 0.4), 0.1 * sc, 0, 0, Math.PI * 2);
+    // Floor with a soft spotlight in the middle.
+    var c = project([0, 0, 0]);
+    ringPath(9.2);
+    ctx.fillStyle = '#100d22';
+    ctx.fill();
+    if (c) {
+      var rr = 9.2 * FOCAL / c.z;
+      var fg = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rr);
+      fg.addColorStop(0, 'rgba(120,90,220,0.35)'); fg.addColorStop(0.5, 'rgba(70,50,150,0.15)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = fg;
       ctx.fill();
     }
+    ringPath(9.2); neon('#ff2d6f', 1.5);
+    ringPath(6); ctx.strokeStyle = 'rgba(45,226,255,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+    ringPath(1.8); ctx.strokeStyle = 'rgba(255,209,102,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  function strokeSegs(drawn, shine) {
+    for (var j = 0; j < drawn.length; j++) {
+      var d = drawn[j], w = Math.max(1, 2 * d.r * FOCAL / d.z);
+      var bx = d.B.x + (d.A.x === d.B.x && d.A.y === d.B.y ? 0.01 : 0);
+      ctx.strokeStyle = rgb(d.c, clamp(1 - (d.z - d.cz) * 1.1, 0.55, 1.15));
+      ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(d.A.x, d.A.y); ctx.lineTo(bx, d.B.y); ctx.stroke();
+      // Highlight along the top edge so limbs look round.
+      if (shine && w > 3) {
+        var o = w * 0.22;
+        ctx.strokeStyle = rgb(mix(d.c, 0.5), 1);
+        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = w * 0.3;
+        ctx.beginPath(); ctx.moveTo(d.A.x - o * 0.4, d.A.y - o); ctx.lineTo(bx - o * 0.4, d.B.y - o); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  function projectSegs(segs, flip) {
     var drawn = [];
-    for (i = 0; i < segs.length; i++) {
-      var q = segs[i], P1 = project(q.a), P2 = project(q.b);
+    for (var i = 0; i < segs.length; i++) {
+      var q = segs[i];
+      var P1 = project(flip ? [q.a[0], -q.a[1], q.a[2]] : q.a), P2 = project(flip ? [q.b[0], -q.b[1], q.b[2]] : q.b);
       if (!P1 || !P2) continue;
       drawn.push({ A: P1, B: P2, z: (P1.z + P2.z) / 2, r: q.r, c: q.c, cz: q.cz });
     }
     drawn.sort(function (a, b) { return b.z - a.z; });
+    return drawn;
+  }
+  function drawFighters(S) {
+    var segs = [], i;
+    for (i = 0; i < S.fighters.length; i++) segments(S.fighters[i], segs);
     ctx.lineCap = 'round';
-    for (var j = 0; j < drawn.length; j++) {
-      var d = drawn[j];
-      ctx.strokeStyle = rgb(d.c, clamp(1 - (d.z - d.cz) * 1.1, 0.55, 1.15));
-      ctx.lineWidth = Math.max(1, 2 * d.r * FOCAL / d.z);
+    // Faint mirror image in the glossy floor, clipped to the ring.
+    ctx.save();
+    ringPath(9.2);
+    ctx.clip();
+    ctx.globalAlpha = 0.16;
+    strokeSegs(projectSegs(segs, true), false);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    for (i = 0; i < S.fighters.length; i++) {
+      var f = S.fighters[i], c = project([f.x, 0, f.z]);
+      if (!c) continue;
+      var sc = FOCAL / c.z, col = LOOKS[f.idx].suit;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.beginPath();
-      ctx.moveTo(d.A.x, d.A.y);
-      ctx.lineTo(d.B.x + (d.A.x === d.B.x && d.A.y === d.B.y ? 0.01 : 0), d.B.y);
+      ctx.ellipse(c.x, c.y, 0.45 * sc / (1 + f.y * 0.4), 0.1 * sc, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Coloured ring under each fighter; brighter when the super is ready.
+      ctx.strokeStyle = rgb(col, 1);
+      ctx.globalAlpha = f.state === 'ko' ? 0.15 : f.meter >= 100 ? 0.6 + 0.3 * Math.sin(f.clock * 12) : 0.4;
+      ctx.lineWidth = Math.max(1, 0.05 * sc);
+      ringPath(0.6, f.x, f.z, 20);
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
+    strokeSegs(projectSegs(segs, false), true);
     // Marker over your own fighter.
     if (A.mode !== 'menu') {
       var me = S.fighters[A.me], m = me && me.state !== 'ko' && project([me.x, me.y + 2.05, me.z]);
@@ -441,13 +495,27 @@
   }
 
   function drawFx() {
-    for (var i = 0; i < sparks.length; i++) {
-      var s = sparks[i], q = project(s.p);
-      if (!q) continue;
-      var r = Math.max(1, 0.05 * FOCAL / q.z * (s.life / s.max));
-      ctx.fillStyle = rgb(s.c, 1);
-      ctx.fillRect(q.x - r, q.y - r, r * 2, r * 2);
+    ctx.globalCompositeOperation = 'lighter';
+    for (var k = 0; k < flashes.length; k++) {
+      var fl = flashes[k], fc = project(fl.p);
+      if (!fc) continue;
+      var kk = fl.t / fl.max, rad = fl.size * (0.5 + kk) * FOCAL / fc.z;
+      var gr = ctx.createRadialGradient(fc.x, fc.y, 0, fc.x, fc.y, rad);
+      gr.addColorStop(0, 'rgba(255,255,255,' + (1 - kk) + ')');
+      gr.addColorStop(0.3, 'rgba(' + fl.c.join(',') + ',' + 0.6 * (1 - kk) + ')');
+      gr.addColorStop(1, 'rgba(' + fl.c.join(',') + ',0)');
+      ctx.fillStyle = gr;
+      ctx.fillRect(fc.x - rad, fc.y - rad, rad * 2, rad * 2);
     }
+    ctx.lineCap = 'round';
+    for (var i = 0; i < sparks.length; i++) {
+      var s = sparks[i], q = project(s.p), e = project([s.p[0] - s.v[0] * 0.03, s.p[1] - s.v[1] * 0.03, s.p[2] - s.v[2] * 0.03]);
+      if (!q || !e) continue;
+      ctx.strokeStyle = rgb(s.c, 1);
+      ctx.lineWidth = Math.max(1, 0.05 * FOCAL / q.z * (s.life / s.max));
+      ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(q.x + 0.01, q.y); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
     for (var j = 0; j < waves.length; j++) {
       var w = waves[j], c = project([w.x, w.y, w.z]);
       if (!c) continue;
