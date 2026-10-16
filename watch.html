@@ -14,8 +14,12 @@
     color-scheme: dark;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
-    font-family: -apple-system, system-ui, "Helvetica Neue", sans-serif; touch-action: none; }
+  /* A plain, normally scrolling page, so the Digital Crown scrolls the menus like any website.
+     During a fight the menus are hidden and everything left is position: fixed, so there's
+     nothing to scroll; touch-action stops swipes from doing anything there. */
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, system-ui, "Helvetica Neue", sans-serif; }
+  html:not(.scroll), html:not(.scroll) body { touch-action: none; }
   canvas { position: fixed; inset: 0; display: block; touch-action: none; }
   #pad { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 3px;
     padding: 0 6px calc(4px + env(safe-area-inset-bottom, 0px)); }
@@ -30,8 +34,8 @@
   #bS.on { transform: translateX(-50%) scale(0.94); }
   @keyframes glow { from { box-shadow: 0 0 6px rgba(255, 209, 102, 0.5); } to { box-shadow: 0 0 18px rgba(255, 209, 102, 0.95); } }
 
-  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-    gap: 7px; padding: 12px; text-align: center; background: rgba(7, 6, 15, 0.86); overflow-y: auto; touch-action: pan-y; }
+  .overlay { position: relative; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
+    gap: 7px; padding: 12px; text-align: center; background: rgba(7, 6, 15, 0.86); }
   .overlay > * { flex-shrink: 0; }
   .overlay > :first-child { margin-top: auto; }
   .overlay > :last-child { margin-bottom: auto; }
@@ -56,10 +60,6 @@
   #lbCode { color: var(--gold); letter-spacing: 0.12em; font-size: 26px; -webkit-user-select: text; user-select: text; }
   #lbList { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 13px; font-weight: 700; width: 100%; max-width: 220px; }
   #lbList small { color: var(--muted); font-weight: 600; }
-  /* Menus scroll the page itself, because that's what the Digital Crown moves.
-     During a fight the page is locked so taps and swipes go to the game. */
-  html.scroll, html.scroll body { height: auto; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; }
-  html.scroll .overlay { position: relative; inset: auto; min-height: 100vh; overflow: visible; }
   [hidden] { display: none !important; }
 </style>
 </head>

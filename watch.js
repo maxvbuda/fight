@@ -132,7 +132,7 @@
     e.preventDefault();
     taps.jump = true;
   });
-  document.addEventListener('touchmove', function (e) { if (A.mode !== 'menu') e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (!document.documentElement.classList.contains('scroll')) e.preventDefault(); }, { passive: false });
 
   var keys = {};
   window.addEventListener('keydown', function (e) {
@@ -182,7 +182,7 @@
     if (id !== 'game') { superBtn.hidden = true; overEl.hidden = true; }
     syncScroll();
   }
-  // Let the page scroll (with the Digital Crown or a finger) while a menu screen is up.
+  // Menu screens: the page scrolls normally (Digital Crown or finger). Fights: touches go to the game.
   function syncScroll() {
     var on = !$('menu').hidden || !$('lobby').hidden || !overEl.hidden;
     var root = document.documentElement;
