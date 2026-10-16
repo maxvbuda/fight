@@ -859,6 +859,8 @@
 
   // ---------- Loop ----------
   var last = 0;
+  // Add ?fps to the address to show a frame-rate counter ("low" means the light graphics kicked in).
+  var SHOW_FPS = /[?&]fps\b/.test(location.search), fpsN = 0, fpsT = 0, fpsVal = 0;
   function frame(ts) {
     window.requestAnimationFrame(frame);
     var rdt = last ? Math.min((ts - last) / 1000, 1 / 20) : 1 / 60;
@@ -904,6 +906,16 @@
     drawFx(shown);
     ctx.restore();
     if (A.mode !== 'menu') { drawHud(S); drawAnnounce(); }
+    if (SHOW_FPS) {
+      fpsN++;
+      if (ts - fpsT >= 1000) { fpsVal = Math.round(fpsN * 1000 / (ts - fpsT)); fpsN = 0; fpsT = ts; }
+      ctx.font = '700 11px -apple-system, system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(4, H - PAD_H - 18, 78, 15);
+      ctx.fillStyle = fpsVal >= 50 ? '#6dff7a' : fpsVal >= 30 ? '#ffd166' : '#ff3b3b';
+      ctx.fillText(fpsVal + ' fps' + (lowFx ? ' · low' : ''), 8, H - PAD_H - 7);
+    }
 
     var showSuper = !!me && A.mode !== 'menu' && S.phase === 'fight' && me.meter >= 100 && me.state !== 'ko';
     if (superBtn.hidden === showSuper) superBtn.hidden = !showSuper;
