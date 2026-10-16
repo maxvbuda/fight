@@ -195,7 +195,7 @@ function playSfx(kind) {
 }
 
 // =====================================================================
-// Effects: sparks, shockwaves, shake. fx() also forwards to the online guest.
+// Effects: sparks, shockwaves, shake. Driven by NBSim events.
 // =====================================================================
 const sparkGeo = new THREE.OctahedronGeometry(0.045);
 const sparks = [];
@@ -249,10 +249,6 @@ function runFx(type, a) {
     case 'announce': announce(a[0], a[1], a[2]); break;
   }
 }
-function fx(type, a) {
-  runFx(type, a);
-  if (Net.role === 'host') Net.events.push([type, a]);
-}
 function updateFx(dt) {
   for (const s of sparks) {
     if (!s.visible) continue;
@@ -289,25 +285,10 @@ function announce(text, mode = 'go', sub = '') {
 function clearAnnounce() { annEl.className = ''; annEl.textContent = ''; subEl.textContent = ''; }
 
 // =====================================================================
-// Fighters
+// Fighter models. The rules live in sim.js (NBSim); these just draw its state.
 // =====================================================================
-const ROSTER = [
-  { name: 'RYKA', color: 0xff2d6f, trim: 0xffd166, skin: 0xe0a47a },
-  { name: 'VOLT', color: 0x2de2ff, trim: 0xb8ff3d, skin: 0x8d5a3b },
-];
-
-// Attack frame data, in seconds.
-const MOVES = {
-  jab:   { start: 0.06, active: 0.08, rec: 0.14, dmg: 5,  range: 1.5,  push: 2.4, stun: 0.28, meter: 7,  lunge: 1.6, sound: 'hit',   h: 1.45 },
-  cross: { start: 0.08, active: 0.08, rec: 0.18, dmg: 7,  range: 1.55, push: 3.2, stun: 0.32, meter: 8,  lunge: 2.2, sound: 'hit',   h: 1.45 },
-  kick:  { start: 0.15, active: 0.1,  rec: 0.28, dmg: 11, range: 1.9,  push: 4.8, stun: 0.42, meter: 12, lunge: 2.6, sound: 'heavy', h: 1.15 },
-  super: { start: 0.3,  active: 0.22, rec: 0.45, dmg: 24, range: 2.0,  push: 11,  stun: 0.85, meter: 0,  lunge: 10,  sound: 'super', h: 1.3, launch: true },
-};
-
-// Pose = joint angles in radians. P() fills unspecified joints from the guard stance.
-const POSE_KEYS = ['hy', 'sx', 'sy', 'nx', 'lsx', 'lsz', 'rsx', 'rsz', 'lex', 'rex', 'lhx', 'lhz', 'rhx', 'rhz', 'lkx', 'rkx'];
-const GUARD = { hy: -0.05, sx: 0.12, sy: -0.22, nx: 0, lsx: -1.0, lsz: 0.2, rsx: -1.0, rsz: -0.2, lex: -1.75, rex: -1.75, lhx: -0.35, lhz: 0.06, rhx: 0.3, rhz: -0.06, lkx: 0.45, rkx: 0.1 };
-const P = (o) => Object.assign({}, GUARD, o);
+const { ROSTER, POSE_KEYS, NONE } = NBSim;
+const hexStr = (n) => '#' + n.toString(16).padStart(6, '0');
 
 function capsule(r, len, mat) {
   const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, Math.max(0.01, len - 2 * r), 4, 12), mat);
@@ -321,18 +302,14 @@ function joint(parent, x, y, z) {
   return g;
 }
 
-class Fighter {
+class FighterView {
   constructor(idx) {
     const d = ROSTER[idx];
-    this.idx = idx;
-    this.name = d.name;
-    this.colorHex = d.color;
     this.suit = new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.4, metalness: 0.15 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x1d1a2c, roughness: 0.7 });
     const skin = new THREE.MeshStandardMaterial({ color: d.skin, roughness: 0.65 });
-    this.trim = new THREE.MeshStandardMaterial({ color: d.trim, emissive: d.trim, emissiveIntensity: 1.3 });
-    const glove = new THREE.MeshStandardMaterial({ color: d.color, emissive: d.color, emissiveIntensity: 0.4, roughness: 0.3 });
-    this.glove = glove;
+    const trim = new THREE.MeshStandardMaterial({ color: d.trim, emissive: d.trim, emissiveIntensity: 1.3 });
+    this.glove = new THREE.MeshStandardMaterial({ color: d.color, emissive: d.color, emissiveIntensity: 0.4, roughness: 0.3 });
 
     this.root = new THREE.Group();
     this.body = new THREE.Group();
@@ -346,7 +323,7 @@ class Fighter {
     torso.scale.set(1.25, 1, 0.72);
     torso.position.y = 0.32;
     spine.add(torso);
-    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.29), this.trim);
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.29), trim);
     belt.position.y = 0.03;
     spine.add(belt);
     const neck = joint(spine, 0, 0.6, 0);
@@ -357,21 +334,20 @@ class Fighter {
     hair.position.y = 0.15;
     hair.rotation.x = -0.25;
     neck.add(hair);
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.06), this.trim);
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.06), trim);
     visor.position.set(0, 0.16, 0.135);
     neck.add(visor);
 
     const arm = (side) => {
       const sh = joint(spine, 0.3 * side, 0.5, 0);
-      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), this.suit);
-      sh.add(pad);
+      sh.add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), this.suit));
       sh.add(capsule(0.07, 0.3, this.suit));
       const el = joint(sh, 0, -0.3, 0);
       el.add(capsule(0.06, 0.28, skin));
-      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.088, 12, 10), glove);
+      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.088, 12, 10), this.glove);
       fist.position.y = -0.3;
       el.add(fist);
-      return [sh, el, fist];
+      return [sh, el];
     };
     const leg = (side) => {
       const hp = joint(hips, 0.12 * side, -0.06, 0);
@@ -381,201 +357,56 @@ class Fighter {
       const boot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.28), dark);
       boot.position.set(0, -0.44, 0.05);
       kn.add(boot);
-      return [hp, kn, boot];
+      return [hp, kn];
     };
     // +x is the fighter's left (they face +z).
-    const [lSh, lEl, lFist] = arm(1);
-    const [rSh, rEl, rFist] = arm(-1);
+    const [lSh, lEl] = arm(1);
+    const [rSh, rEl] = arm(-1);
     const [lHip, lKn] = leg(1);
-    const [rHip, rKn, rBoot] = leg(-1);
+    const [rHip, rKn] = leg(-1);
     this.j = { spine, neck, lSh, rSh, lEl, rEl, lHip, rHip, lKn, rKn };
-    this.hands = [lFist, rFist];
-    this.foot = rBoot;
     this.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
 
-    this.pose = P({});
-    this.vel = V();
-    this.airMove = V();
-    this.dir = V(1, 0, 0);
-    this.meter = 0;
-    this.clock = Math.random() * 10;
-    this.walkPh = 0;
-    this.reset(idx === 0 ? -2.4 : 2.4);
-  }
-  get pos() { return this.root.position; }
-  get grounded() { return this.pos.y <= 0 && this.vel.y <= 0; }
-
-  reset(x) {
-    this.pos.set(x, 0, 0);
-    this.vel.set(0, 0, 0);
-    this.hp = 100;
-    this.state = 'idle';
-    this.atk = null;
-    this.stun = 0;
-    this.combo = 0;
-    this.flash = 0;
-    this.lastPunch = 'cross';
-    this.punchT = 0;
-    this.body.rotation.set(0, 0, 0);
-    this.body.position.set(0, 0, 0);
-    this.dir.set(x < 0 ? 1 : -1, 0, 0);
-    this.root.rotation.y = Math.atan2(this.dir.x, this.dir.z);
+    // Name tag over the head ("YOU", "P2", ...).
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 48;
+    this.tagCanvas = c;
+    this.tagTex = new THREE.CanvasTexture(c);
+    this.tagTex.colorSpace = THREE.SRGBColorSpace;
+    this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tagTex, depthTest: false, transparent: true }));
+    this.tag.scale.set(0.75, 0.28, 1);
+    this.tag.position.y = 2.2;
+    this.tag.renderOrder = 10;
+    this.tagText = null;
+    this.color = d.color;
+    this.root.add(this.tag);
+    this.root.visible = false;
   }
 
-  nextPunch() {
-    const name = this.punchT > 0 && this.lastPunch === 'jab' ? 'cross' : 'jab';
-    this.lastPunch = name;
-    this.punchT = 0.5;
-    return name;
-  }
-  startAttack(name) {
-    this.atk = { name, t: 0, hit: false, waved: false };
-    this.state = 'attack';
-    if (name === 'super') {
-      this.meter = 0;
-      fx('sfx', 'charge');
-    } else fx('sfx', 'whoosh');
-  }
-
-  update(dt, inp, opp) {
-    const p = this.pos, o = opp.pos;
-    const dx = o.x - p.x, dz = o.z - p.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist > 1e-4) this.dir.set(dx / dist, 0, dz / dist);
-    const grounded = this.grounded;
-    const move = V();
-    this.punchT -= dt;
-    this.clock += dt;
-
-    if (this.state !== 'ko') this.root.rotation.y = lerpAngle(this.root.rotation.y, Math.atan2(this.dir.x, this.dir.z), damp(18, dt));
-
-    if (this.state === 'ko' || this.state === 'win') {
-      // no control
-    } else if (this.stun > 0) {
-      this.stun -= dt;
-      if (this.stun <= 0) this.state = 'idle';
-    } else if (this.atk) {
-      const a = this.atk, m = MOVES[a.name];
-      a.t += dt;
-      if (!grounded) move.copy(this.airMove);
-      else if (a.t > m.start * 0.5 && a.t < m.start + m.active && dist > 0.95) move.addScaledVector(this.dir, m.lunge);
-      if (a.name === 'super' && a.t >= m.start && !a.waved) {
-        a.waved = true;
-        fx('wave', [p.x + this.dir.x * 0.6, 1.3, p.z + this.dir.z * 0.6, this.colorHex]);
-      }
-      if (a.t >= m.start && a.t < m.start + m.active && !a.hit) this.tryHit(opp, m, dist);
-      const recovering = a.t >= m.start + m.active;
-      // Landing a hit lets you cancel recovery into the next attack: that's the combo system.
-      if (a.hit && recovering && a.name !== 'super' && (inp.punch || inp.kick)) {
-        this.startAttack(inp.punch ? this.nextPunch() : 'kick');
-      } else if (a.t >= m.start + m.active + m.rec) {
-        this.atk = null;
-        this.state = 'idle';
-      }
-    } else {
-      this.state = 'idle';
-      if (inp.super && this.meter >= 100) this.startAttack('super');
-      else if (inp.punch) this.startAttack(this.nextPunch());
-      else if (inp.kick) this.startAttack('kick');
-      else if (!grounded) move.copy(this.airMove);
-      else if (inp.block) this.state = 'block';
-      else {
-        const fwd = inp.move.dot(this.dir);
-        move.copy(inp.move).multiplyScalar(fwd < -0.3 ? 2.6 : 3.4);
-        if (move.lengthSq() > 0.01) {
-          this.state = 'walk';
-          this.walkPh += dt * 10 * (fwd < -0.3 ? -1 : 1);
-        }
-        if (inp.jump) {
-          this.vel.y = 7.4;
-          this.airMove.copy(move).multiplyScalar(1.15);
-          this.state = 'idle';
-          fx('sfx', 'jump');
-        }
-      }
+  setTag(text) {
+    if (text === this.tagText) return;
+    this.tagText = text;
+    const g = this.tagCanvas.getContext('2d');
+    g.clearRect(0, 0, 128, 48);
+    if (text) {
+      g.font = '700 28px "Chakra Petch", system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = hexStr(this.color);
+      g.fillText(text, 64, 20);
+      g.beginPath(); g.moveTo(56, 38); g.lineTo(72, 38); g.lineTo(64, 46); g.fill();
     }
-
-    // Physics
-    const wasAir = p.y > 0;
-    this.vel.y -= 22 * dt;
-    p.y += this.vel.y * dt;
-    if (p.y <= 0) {
-      p.y = 0;
-      if (wasAir && this.vel.y < -4) fx('sfx', 'land');
-      this.vel.y = 0;
-    }
-    p.x += (move.x + this.vel.x) * dt;
-    p.z += (move.z + this.vel.z) * dt;
-    const fr = Math.exp(-(p.y > 0 ? 0.6 : 7) * dt);
-    this.vel.x *= fr;
-    this.vel.z *= fr;
-    const r = Math.hypot(p.x, p.z);
-    if (r > ARENA_R) { p.x *= ARENA_R / r; p.z *= ARENA_R / r; }
-
-    this.animate(dt);
+    this.tagTex.needsUpdate = true;
+    this.tag.visible = !!text;
   }
 
-  tryHit(opp, m, dist) {
-    if (dist < m.range && Math.abs(this.pos.y - opp.pos.y) < 1.1 && opp.state !== 'ko') {
-      this.atk.hit = true;
-      resolveHit(this, opp, m);
-    }
-  }
-
-  attackPose(a) {
-    const m = MOVES[a.name], t = a.t;
-    const out = t >= m.start * 0.6 && t < m.start + m.active + m.rec * 0.35;
-    switch (a.name) {
-      case 'jab': return out ? P({ sy: -0.6, lsx: -1.57, lsz: 0.04, lex: -0.05, rsx: -1.15, hy: -0.07, sx: 0.2 }) : P({ sy: -0.1 });
-      case 'cross': return out ? P({ sy: 0.6, rsx: -1.57, rsz: -0.04, rex: -0.05, lsx: -1.15, hy: -0.08, sx: 0.22, rhx: 0.45, rkx: 0.25 }) : P({ sy: -0.45 });
-      case 'kick':
-        if (t < m.start) return P({ rhx: -1.5, rkx: 1.9, sx: -0.1, lkx: 0.3, lhx: -0.1 });
-        if (out) return P({ rhx: -1.6, rkx: 0.05, sx: -0.35, lhx: 0.05, lkx: 0.25, lsx: -0.7, rsx: -0.6, rsz: -0.5, sy: 0.25 });
-        return P({});
-      case 'super':
-        if (t < m.start) return P({ sy: 0.7, lsx: -0.3, rsx: 0.5, lex: -1.3, rex: -1.3, hy: -0.2, lkx: 0.9, rkx: 0.7, lhx: -0.5, rhx: 0.2 });
-        if (out) return P({ sy: 0, sx: 0.3, lsx: -1.55, rsx: -1.55, lsz: -0.12, rsz: 0.12, lex: 0, rex: 0, hy: -0.16, lhx: -0.7, lkx: 0.8, rhx: 0.6, rkx: 0.1 });
-        return P({});
-    }
-  }
-
-  animate(dt) {
-    const t = this.clock, c = this.pose;
-    let tg, rate = 14;
-    if (this.state === 'ko') {
-      tg = P({ hy: 0, sx: -0.3, sy: 0, nx: -0.4, lsx: -2.6, lsz: 0.9, rsx: -2.6, rsz: -0.9, lex: 0, rex: 0, lhx: -0.2, rhx: -0.1, lkx: 0.3, rkx: 0.1 });
-      const k = damp(this.pos.y > 0 ? 4 : 7, dt);
-      this.body.rotation.x += (-1.5 - this.body.rotation.x) * k;
-      this.body.position.y += (0.16 - this.body.position.y) * k;
-    } else if (this.state === 'win') {
-      tg = P({ sy: 0, rsx: -2.95, rsz: -0.25, rex: -0.15, lsx: -0.9, hy: -0.03 + Math.abs(Math.sin(t * 5)) * 0.05, nx: -0.2 });
-    } else if (this.stun > 0) {
-      tg = P({ sx: -0.5, nx: -0.4, lsx: -0.4, lsz: 0.7, rsx: -0.4, rsz: -0.7, lex: -0.6, rex: -0.6, hy: -0.08, lkx: 0.6, rkx: 0.5 });
-      rate = 26;
-    } else if (this.atk) {
-      tg = this.attackPose(this.atk);
-      rate = 38;
-    } else if (this.pos.y > 0) {
-      tg = P({ lhx: -1.1, lkx: 1.7, rhx: -0.5, rkx: 1.5, sx: 0.25, lsx: -1.3, rsx: -1.3 });
-    } else if (this.state === 'block') {
-      tg = P({ sx: 0.3, sy: 0, nx: 0.2, lsx: -1.45, lsz: -0.35, lex: -2.0, rsx: -1.45, rsz: 0.35, rex: -2.0, hy: -0.13, lhx: -0.55, lkx: 0.8, rhx: 0.15, rkx: 0.45 });
-      rate = 30;
-    } else if (this.state === 'walk') {
-      const s = Math.sin(this.walkPh);
-      tg = P({ lhx: -0.35 + s * 0.45, rhx: 0.3 - s * 0.45, lkx: 0.45 + Math.max(0, -s) * 0.6, rkx: 0.15 + Math.max(0, s) * 0.6, hy: -0.06 + Math.abs(Math.cos(this.walkPh)) * 0.03 });
-    } else {
-      const b = Math.sin(t * 3.2);
-      tg = P({ hy: -0.05 + b * 0.015, sx: 0.12 + b * 0.02, lsx: -1.0 + b * 0.05, rsx: -1.0 - b * 0.05 });
-    }
-    const k = damp(rate, dt);
-    for (const key of POSE_KEYS) c[key] += (tg[key] - c[key]) * k;
-    this.applyPose();
-    if (this.flash > 0) this.flash -= dt;
-    this.applyFlash();
-  }
-
-  applyPose() {
-    const c = this.pose, j = this.j;
+  sync(f) {
+    this.root.visible = true;
+    this.root.position.set(f.x, f.y, f.z);
+    this.root.rotation.y = f.yaw;
+    this.body.rotation.x = f.bodyRx;
+    this.body.position.y = f.bodyY;
+    const c = f.pose, j = this.j;
     this.hips.position.y = 1.0 + c.hy;
     j.spine.rotation.set(c.sx, c.sy, 0);
     j.neck.rotation.set(c.nx, -c.sy * 0.6, 0);
@@ -587,183 +418,38 @@ class Fighter {
     j.rHip.rotation.set(c.rhx, 0, c.rhz);
     j.lKn.rotation.x = c.lkx;
     j.rKn.rotation.x = c.rkx;
-  }
-  applyFlash() {
-    const f = Math.max(0, this.flash) / 0.12;
-    this.suit.emissive.setRGB(f, f, f);
-    const full = this.meter >= 100;
-    this.glove.emissiveIntensity = full ? 1.2 + Math.sin(this.clock * 12) * 0.6 : 0.4;
+    const fl = Math.max(0, f.flash) / 0.12;
+    this.suit.emissive.setRGB(fl, fl, fl);
+    this.glove.emissiveIntensity = f.meter >= 100 ? 1.2 + Math.sin(f.clock * 12) * 0.6 : 0.4;
   }
 }
-
-const F = [new Fighter(0), new Fighter(1)];
+const views = ROSTER.map((_, i) => new FighterView(i));
 
 // =====================================================================
-// Game state and rules (runs on local games and on the online host)
+// App state
 // =====================================================================
-const G = {
-  mode: 'menu', // 'cpu' | 'local' | 'host' | 'guest'
-  phase: 'menu', // 'menu' | 'intro' | 'fight' | 'ko' | 'over'
-  round: 1, wins: [0, 0], timer: 99, phaseT: 0,
-  timeScale: 1, hitstop: 0, paused: false,
-  difficulty: 'normal', winner: -1, flags: {},
+const A = {
+  mode: 'menu', // 'menu' | 'local' | 'host' | 'guest'
+  S: null, // NBSim match state (simulated here, or mirrored from the host)
+  menuS: NBSim.createMatch({ slots: [{ kind: 'cpu' }, { kind: 'cpu' }] }),
+  you: [], // fighter indices controlled on this device
+  humans: [], // { fidx, bind, pad }
+  paused: false,
+  snap: null, pending: [], sendAcc: 0, overShown: false,
+  lobbyRole: null,
+  opts: { fighters: 2, humans: 1, diff: 'normal', onlineFighters: 2 },
 };
+A.menuS.events = [];
 
-function resolveHit(att, def, m) {
-  const blocked = def.state === 'block';
-  let dmg = m.dmg;
-  if (blocked) dmg *= m === MOVES.super ? 0.35 : 0.1;
-  else {
-    att.combo = def.stun > 0 ? att.combo + 1 : 1;
-    dmg *= Math.max(0.5, 1 - (att.combo - 1) * 0.08);
-  }
-  def.hp = Math.max(0, def.hp - dmg);
-  att.meter = Math.min(100, att.meter + m.meter * (blocked ? 0.4 : 1));
-  def.meter = Math.min(100, def.meter + dmg * 0.5);
-  const push = m.push * (blocked ? 0.55 : 1);
-  def.vel.x = att.dir.x * push;
-  def.vel.z = att.dir.z * push;
-
-  const hx = att.pos.x + (def.pos.x - att.pos.x) * 0.7;
-  const hz = att.pos.z + (def.pos.z - att.pos.z) * 0.7;
-  const hy = Math.max(att.pos.y, def.pos.y) + m.h;
-  if (blocked) {
-    fx('burst', [hx, hy, hz, 0x9fe8ff, 10, 4]);
-    fx('sfx', 'block');
-    G.hitstop = 0.035;
-  } else {
-    def.flash = 0.12;
-    // A super in progress can't be interrupted: the defender takes the damage but keeps attacking.
-    if (!(def.atk && def.atk.name === 'super')) {
-      def.stun = m.stun;
-      def.atk = null;
-      def.state = 'hit';
-    }
-    if (m.launch || def.hp <= 0) def.vel.y = 6.2;
-    const big = m === MOVES.super;
-    fx('burst', [hx, hy, hz, att.colorHex, big ? 50 : m === MOVES.kick ? 26 : 18, big ? 9 : 6]);
-    fx('sfx', m.sound);
-    fx('shake', big ? 0.45 : m === MOVES.kick ? 0.18 : 0.1);
-    G.hitstop = big ? 0.18 : m === MOVES.kick ? 0.08 : 0.055;
-  }
-  if (def.hp <= 0) knockOut(att, def);
-}
-
-function knockOut(att, def) {
-  def.state = 'ko';
-  def.stun = 0;
-  def.atk = null;
-  G.wins[att.idx]++;
-  G.winner = att.idx;
-  G.phase = 'ko';
-  G.phaseT = 0;
-  G.timeScale = 0.3;
-  G.flags = {};
-  fx('sfx', 'ko');
-  fx('shake', 0.5);
-  fx('announce', ['K.O.', 'ko']);
-}
-
-function timeUp() {
-  G.phase = 'ko';
-  G.phaseT = 0;
-  G.flags = {};
-  const [a, b] = F;
-  G.winner = a.hp === b.hp ? -1 : a.hp > b.hp ? 0 : 1;
-  if (G.winner >= 0) G.wins[G.winner]++;
-  fx('announce', ['TIME', 'ko']);
-  fx('sfx', 'bell');
-}
-
-function startRound() {
-  F[0].reset(-2.4);
-  F[1].reset(2.4);
-  G.timer = 99;
-  G.phase = 'intro';
-  G.phaseT = 0;
-  G.timeScale = 1;
-  G.hitstop = 0;
-  G.winner = -1;
-  G.flags = {};
-  const final = G.wins[0] === 1 && G.wins[1] === 1;
-  fx('announce', [final ? 'FINAL\nROUND' : `ROUND ${G.round}`, 'go']);
-}
-
-function startMatch(mode) {
-  initAudio();
-  G.mode = mode;
-  G.wins = [0, 0];
-  G.round = 1;
-  G.paused = false;
-  F[0].meter = F[1].meter = 0;
-  for (const f of F) f.ai = { t: 0, act: 'approach', blockT: 0, rolled: false, side: 1 };
-  $('#menu').hidden = true;
-  $('#pause').hidden = true;
-  $('#hud').hidden = false;
-  $('#n2').textContent = mode === 'cpu' ? 'VOLT · CPU' : 'VOLT';
-  setNetTag();
-  startRound();
-}
-
-function stepGame(rdt) {
-  let dt = rdt;
-  if (G.hitstop > 0) { G.hitstop -= rdt; dt = 0; }
-  dt *= G.timeScale;
-  G.phaseT += rdt;
-
-  const fighting = G.phase === 'fight';
-  const i1 = fighting ? inputFor(0) : NO_INPUT;
-  const i2 = fighting ? inputFor(1) : NO_INPUT;
-  F[0].update(dt, i1, F[1]);
-  F[1].update(dt, i2, F[0]);
-  separate(F[0], F[1]);
-  consumeRemoteEdges();
-
-  switch (G.phase) {
-    case 'intro':
-      if (!G.flags.fight && G.phaseT > 1.3) { G.flags.fight = true; fx('announce', ['FIGHT!', 'go']); fx('sfx', 'bell'); }
-      if (G.phaseT > 1.8) { G.phase = 'fight'; G.phaseT = 0; }
-      break;
-    case 'fight':
-      G.timer -= dt;
-      if (G.timer <= 0) { G.timer = 0; timeUp(); }
-      break;
-    case 'ko':
-      if (G.phaseT > 1.1) G.timeScale = 1;
-      if (!G.flags.win && G.phaseT > 1.8) {
-        G.flags.win = true;
-        const w = F[G.winner];
-        if (w && w.state !== 'ko') { w.atk = null; w.stun = 0; w.state = 'win'; }
-        const perfect = w && w.hp >= 100;
-        const matchOver = G.wins.some((x) => x >= 2);
-        if (!matchOver) fx('announce', [w ? `${w.name} WINS` : 'DRAW', 'stay', perfect ? 'PERFECT' : '']);
-        else fx('announce', [`${w.name}\nVICTORY`, 'stay', rematchHint()]);
-      }
-      if (G.phaseT > 4.2) {
-        if (G.wins.some((x) => x >= 2)) G.phase = 'over';
-        else { G.round++; startRound(); }
-      }
-      break;
-  }
-}
-function rematchHint() {
-  return 'ENTER: REMATCH · ESC: MENU';
-}
-
-function separate(a, b) {
-  const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
-  const d = Math.hypot(dx, dz);
-  const min = 0.8;
-  if (d < min && Math.abs(a.pos.y - b.pos.y) < 1.3 && a.state !== 'ko' && b.state !== 'ko') {
-    const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0;
-    const push = (min - d) / 2;
-    a.pos.x -= nx * push; a.pos.z -= nz * push;
-    b.pos.x += nx * push; b.pos.z += nz * push;
-  }
+function drain(S) {
+  const ev = S.events;
+  S.events = [];
+  for (const [type, a] of ev) runFx(type, a);
+  return ev;
 }
 
 // =====================================================================
-// Input: keyboard, gamepad, CPU, remote
+// Input: keyboard and gamepads
 // =====================================================================
 const keys = new Set();
 const pressed = new Set();
@@ -771,7 +457,7 @@ addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   if (!e.repeat) pressed.add(e.code);
   keys.add(e.code);
-  if (G.phase !== 'menu' && /^(Arrow|Space|Slash|Quote)/.test(e.code)) e.preventDefault();
+  if (A.mode !== 'menu' && /^(Arrow|Space|Slash|Quote)/.test(e.code)) e.preventDefault();
   onMetaKey(e.code);
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -781,17 +467,17 @@ const BIND = {
   p1: { left: ['KeyA'], right: ['KeyD'], up: ['KeyW'], down: ['KeyS'], jump: ['Space'], punch: ['KeyJ', 'KeyF'], kick: ['KeyK', 'KeyG'], block: ['KeyL', 'KeyH'], super: ['KeyU', 'KeyR'] },
   p2: { left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'], jump: ['ShiftRight', 'Numpad0'], punch: ['Comma', 'Numpad1'], kick: ['Period', 'Numpad2'], block: ['Slash', 'Numpad3'], super: ['Semicolon', 'Numpad4'] },
 };
-// Solo and online players get both key sets.
+// A lone player on this device gets both key sets.
 BIND.solo = Object.fromEntries(Object.keys(BIND.p1).map((k) => [k, [...BIND.p1[k], ...BIND.p2[k]]]));
+BIND.none = Object.fromEntries(Object.keys(BIND.p1).map((k) => [k, []]));
 
-const NO_INPUT = { move: V(), jump: false, punch: false, kick: false, block: false, super: false };
 const held = (list) => list.some((c) => keys.has(c));
 const hit = (list) => list.some((c) => pressed.has(c));
 
-const padPrev = [[], []];
+const padPrev = [[], [], [], []];
 function readPad(i) {
-  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-  const pad = [...pads].filter(Boolean)[i];
+  const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+  const pad = pads[i];
   if (!pad) return null;
   const b = (n) => !!pad.buttons[n]?.pressed;
   const edge = (n) => { const now = b(n), was = padPrev[i][n]; padPrev[i][n] = now; return now && !was; };
@@ -800,352 +486,307 @@ function readPad(i) {
   if (Math.abs(mz) < 0.25) mz = 0;
   mx += (b(15) ? 1 : 0) - (b(14) ? 1 : 0);
   mz += (b(12) ? 1 : 0) - (b(13) ? 1 : 0);
-  return { mx, mz, jump: edge(0), super: edge(1), punch: edge(2), kick: edge(3), block: b(5) || b(4) || b(7), start: edge(9) };
+  return { mx, mz, jump: edge(0), super: edge(1), punch: edge(2), kick: edge(3), block: b(5) || b(4) || b(7) };
 }
 
-// Screen-relative intent: mx = right, mz = into the screen.
-function readIntent(bind, padIndex) {
-  const b = BIND[bind];
-  const it = {
-    mx: (held(b.right) ? 1 : 0) - (held(b.left) ? 1 : 0),
-    mz: (held(b.up) ? 1 : 0) - (held(b.down) ? 1 : 0),
-    jump: hit(b.jump), punch: hit(b.punch), kick: hit(b.kick), block: held(b.block), super: hit(b.super),
-  };
-  const pad = padIndex >= 0 ? readPad(padIndex) : null;
+const camFwd = V(0, 0, -1), camRight = V(1, 0, 0);
+// Returns an NBSim input: world-space move plus buttons. Movement is relative to the camera.
+function readHuman(h) {
+  const b = BIND[h.bind] || BIND.none;
+  let sx = (held(b.right) ? 1 : 0) - (held(b.left) ? 1 : 0);
+  let sz = (held(b.up) ? 1 : 0) - (held(b.down) ? 1 : 0);
+  const it = { jump: hit(b.jump), punch: hit(b.punch), kick: hit(b.kick), block: held(b.block), super: hit(b.super) };
+  const pad = readPad(h.pad);
   if (pad) {
-    it.mx = clamp(it.mx + pad.mx, -1, 1);
-    it.mz = clamp(it.mz + pad.mz, -1, 1);
+    sx = clamp(sx + pad.mx, -1, 1);
+    sz = clamp(sz + pad.mz, -1, 1);
     for (const k of ['jump', 'punch', 'kick', 'block', 'super']) it[k] = it[k] || pad[k];
   }
+  const move = V().addScaledVector(camRight, sx).addScaledVector(camFwd, sz);
+  if (move.lengthSq() > 1) move.normalize();
+  it.mx = move.x;
+  it.mz = move.z;
   return it;
 }
-const camFwd = V(), camRight = V();
-function intentToWorld(it) {
-  const move = V().addScaledVector(camRight, it.mx).addScaledVector(camFwd, it.mz);
-  if (move.lengthSq() > 1) move.normalize();
-  return { move, jump: it.jump, punch: it.punch, kick: it.kick, block: it.block, super: it.super };
+
+// =====================================================================
+// Starting matches
+// =====================================================================
+function beginMatch(mode, S) {
+  initAudio();
+  A.mode = mode;
+  A.S = S;
+  A.paused = false;
+  A.snap = null;
+  A.pending = [];
+  A.overShown = false;
+  $('#menu').hidden = true;
+  $('#lobby').hidden = true;
+  $('#pause').hidden = true;
+  $('#hud').hidden = false;
+  clearAnnounce();
+  buildHud(S);
+  setNetTag();
+  if (mode !== 'guest') A.pending = drain(S);
 }
 
-function inputFor(i) {
-  if (i === 0) return intentToWorld(readIntent(G.mode === 'local' ? 'p1' : 'solo', 0));
-  if (G.mode === 'local') return intentToWorld(readIntent('p2', 1));
-  if (G.mode === 'cpu') return cpuInput(F[1], F[0]);
-  if (G.mode === 'host') return remoteInput();
-  return NO_INPUT;
+function startLocal() {
+  NBNet.close();
+  setStatus('');
+  const humans = A.opts.humans;
+  const n = Math.max(A.opts.fighters, humans);
+  const slots = [];
+  for (let i = 0; i < n; i++) slots.push(i < humans ? { kind: 'local', label: 'P' + (i + 1) } : { kind: 'cpu', label: 'CPU' });
+  A.humans = [];
+  for (let i = 0; i < humans; i++) A.humans.push({ fidx: i, bind: humans === 1 ? 'solo' : i === 0 ? 'p1' : i === 1 ? 'p2' : 'none', pad: i });
+  A.you = A.humans.map((h) => h.fidx);
+  beginMatch('local', NBSim.createMatch({ slots, diff: A.opts.diff, profile: 'desktop', roundTime: 99 }));
 }
 
-const DIFF = {
-  easy: { react: 0.12, aggr: 0.35, think: 0.5, combo: 0.15 },
-  normal: { react: 0.38, aggr: 0.6, think: 0.3, combo: 0.45 },
-  hard: { react: 0.68, aggr: 0.85, think: 0.16, combo: 0.8 },
-};
-let lastDt = 1 / 60;
-function cpuInput(me, opp) {
-  const ai = me.ai, df = DIFF[G.difficulty], dt = lastDt;
-  const inp = { move: V(), jump: false, punch: false, kick: false, block: false, super: false };
-  const dx = opp.pos.x - me.pos.x, dz = opp.pos.z - me.pos.z;
-  const d = Math.hypot(dx, dz);
-  const dir = me.dir, side = V(-dir.z, 0, dir.x);
+function hostStart() {
+  const guests = NBNet.guestCount();
+  const n = Math.min(4, Math.max(A.opts.onlineFighters, guests + 1));
+  const slots = [{ kind: 'local', label: 'P1' }];
+  for (let i = 0; i < guests; i++) slots.push({ kind: 'remote', label: 'P' + (i + 2) });
+  while (slots.length < n) slots.push({ kind: 'cpu', label: 'CPU' });
+  const S = NBSim.createMatch({ slots, diff: A.opts.diff, profile: 'desktop', roundTime: 99 });
+  NBNet.startMatch(slots, { roundTime: 99, profile: 'desktop' });
+  A.humans = [{ fidx: 0, bind: 'solo', pad: 0 }];
+  A.you = [0];
+  beginMatch('host', S);
+}
 
-  // Reactive blocking: one roll per incoming attack.
-  if (opp.atk && d < 2.4) {
-    if (!ai.rolled) { ai.rolled = true; ai.blocking = Math.random() < df.react; ai.blockT = 0.4; }
-  } else ai.rolled = false;
-  if (ai.blockT > 0) {
-    ai.blockT -= dt;
-    if (ai.blocking && !me.atk) { inp.block = true; return inp; }
-  }
-  // Chain combos after landing a hit.
-  if (me.atk && me.atk.hit && Math.random() < df.combo * dt * 12) {
-    if (Math.random() < 0.65) inp.punch = true; else inp.kick = true;
-  }
+function guestStart(msg) {
+  const S = NBSim.createMatch({ slots: msg.slots, roundTime: msg.roundTime, profile: msg.profile });
+  S.events = []; // the host sends its own announcements
+  A.humans = [{ fidx: msg.you, bind: 'solo', pad: 0 }];
+  A.you = [msg.you];
+  beginMatch('guest', S);
+}
 
-  ai.t -= dt;
-  let fresh = false;
-  if (ai.t <= 0) {
-    ai.t = df.think * (0.5 + Math.random());
-    fresh = true;
-    const r = Math.random();
-    if (me.meter >= 100 && d < 2.2 && r < 0.5) ai.act = 'super';
-    else if (d > 2.3) ai.act = r < 0.12 ? 'side' : r < 0.18 ? 'jumpin' : 'approach';
-    else if (d > 1.6) ai.act = r < df.aggr * 0.6 ? 'kick' : r < 0.72 ? 'approach' : r < 0.86 ? 'retreat' : 'side';
-    else ai.act = r < df.aggr * 0.55 ? 'punch' : r < df.aggr * 0.85 ? 'kick' : r < 0.82 ? 'retreat' : r < 0.93 ? 'side' : 'jump';
-    ai.side = Math.random() < 0.5 ? -1 : 1;
-  }
-  switch (ai.act) {
-    case 'approach': inp.move.copy(dir); break;
-    case 'retreat': inp.move.copy(dir).multiplyScalar(-0.9); break;
-    case 'side': inp.move.copy(side).multiplyScalar(ai.side); break;
-    case 'jumpin': inp.move.copy(dir); inp.jump = fresh; if (me.pos.y > 1 && !me.atk) inp.kick = true; break;
-    case 'jump': inp.jump = fresh; break;
-    case 'punch': inp.punch = fresh; break;
-    case 'kick': inp.kick = fresh; break;
-    case 'super': inp.super = fresh; break;
-  }
-  return inp;
+function rematch() {
+  if (A.mode === 'local') { NBSim.rematch(A.S); A.overShown = false; clearAnnounce(); buildHud(A.S); }
+  else if (A.mode === 'host') hostStart();
+  else if (A.mode === 'guest') NBNet.requestRematch();
 }
 
 // =====================================================================
-// Online play (PeerJS / WebRTC). Host simulates; guest sends inputs and renders snapshots.
+// Menu, lobby, pause
 // =====================================================================
-const Net = {
-  peer: null, conn: null, role: null, code: '',
-  events: [],
-  remote: { mx: 0, mz: 0, block: false, c: [0, 0, 0, 0] },
-  seen: [0, 0, 0, 0],
-  counts: [0, 0, 0, 0],
-  snap: null,
-};
-const PREFIX = 'neonbrawl-v1-';
 const statusEl = $('#netStatus');
-const setStatus = (html) => { statusEl.innerHTML = html; };
+function setStatus(t) { statusEl.textContent = t; $('#lobbyNote').textContent = A.lobbyRole ? t : ''; }
 
-function closeNet() {
-  try { Net.conn?.close(); } catch {}
-  try { Net.peer?.destroy(); } catch {}
-  Net.peer = Net.conn = Net.role = null;
-  Net.events = [];
-  Net.snap = null;
+function updateLocalNote() {
+  const { fighters, humans } = A.opts;
+  const n = Math.max(fighters, humans);
+  const parts = [`${humans} player${humans > 1 ? 's' : ''}${n > humans ? ` vs ${n - humans} CPU` : ''}.`];
+  if (humans > fighters) parts.push(`Fighters raised to ${n} to fit everyone.`);
+  if (humans >= 3) parts.push('Players 3 and 4 need gamepads.');
+  $('#localNote').textContent = parts.join(' ');
 }
+document.querySelectorAll('.seg').forEach((seg) => seg.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  const v = b.dataset.v;
+  A.opts[seg.dataset.key] = isNaN(+v) ? v : +v;
+  updateLocalNote();
+  if (seg.dataset.key === 'onlineFighters') renderLobby(lastLobby);
+}));
+updateLocalNote();
 
-function makeCode() {
-  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 5 }, () => A[Math.floor(Math.random() * A.length)]).join('');
-}
-
-function hostOnline() {
-  if (!window.Peer) { setStatus('Online play could not load. Check your connection and reload.'); return; }
-  closeNet();
-  initAudio();
-  Net.code = makeCode();
-  setStatus('Opening a room…');
-  const peer = (Net.peer = new Peer(PREFIX + Net.code));
-  peer.on('open', () => setStatus(`Room code <strong>${Net.code}</strong> · Send it to your opponent. Waiting for them to join…`));
-  peer.on('connection', (conn) => {
-    if (Net.conn) { conn.on('open', () => conn.close()); return; }
-    Net.conn = conn;
-    Net.role = 'host';
-    conn.on('open', () => {
-      Net.seen = [0, 0, 0, 0];
-      Net.remote = { mx: 0, mz: 0, block: false, c: [0, 0, 0, 0] };
-      startMatch('host');
-    });
-    conn.on('data', onNetData);
-    conn.on('close', () => disconnected());
-    conn.on('error', () => disconnected());
-  });
-  peer.on('error', (e) => setStatus(e.type === 'unavailable-id' ? 'That room code is taken. Try hosting again.' : `Online error: ${e.type}. Try again.`));
-}
-
-function joinOnline(code) {
-  code = code.trim().toUpperCase();
-  if (code.length < 4) { setStatus('Enter the 5-letter room code from the host.'); return; }
-  if (!window.Peer) { setStatus('Online play could not load. Check your connection and reload.'); return; }
-  closeNet();
-  initAudio();
-  setStatus('Connecting…');
-  const peer = (Net.peer = new Peer());
-  peer.on('open', () => {
-    const conn = (Net.conn = peer.connect(PREFIX + code, { reliable: true }));
-    conn.on('open', () => {
-      Net.role = 'guest';
-      Net.counts = [0, 0, 0, 0];
-      G.mode = 'guest';
-      G.phase = 'intro';
-      $('#menu').hidden = true;
-      $('#hud').hidden = false;
-      $('#n2').textContent = 'VOLT';
-      setNetTag();
-      setStatus('');
-    });
-    conn.on('data', onNetData);
-    conn.on('close', () => disconnected());
-    conn.on('error', () => disconnected());
-  });
-  peer.on('error', (e) => setStatus(e.type === 'peer-unavailable' ? `No open room with code ${code}. Check the code with the host.` : `Online error: ${e.type}. Try again.`));
-}
-
-function disconnected() {
-  if (!Net.role) return;
-  closeNet();
-  toMenu();
-  setStatus('Your opponent disconnected.');
-}
-
-function setNetTag() {
-  const t = $('#netTag');
-  t.hidden = !(G.mode === 'host' || G.mode === 'guest');
-  t.textContent = G.mode === 'host' ? `ONLINE · ROOM ${Net.code} · YOU ARE RYKA` : 'ONLINE · YOU ARE VOLT';
-}
-
-function onNetData(msg) {
-  if (!msg || typeof msg !== 'object') return;
-  if (msg.t === 'in' && Net.role === 'host') {
-    Net.remote = msg;
-  } else if (msg.t === 'rematch' && Net.role === 'host' && G.phase === 'over') {
-    startMatch('host');
-  } else if (msg.t === 's' && Net.role === 'guest') {
-    Net.snap = msg;
-    for (const [type, a] of msg.e) runFx(type, a);
-  }
-}
-
-// Turn the guest's press counters into one-frame button presses on the host.
-const BTN = ['jump', 'punch', 'kick', 'super'];
-function remoteInput() {
-  const r = Net.remote;
-  const inp = { move: V(clamp(r.mx, -1, 1), 0, clamp(r.mz, -1, 1)), block: !!r.block };
-  BTN.forEach((k, i) => { inp[k] = (r.c?.[i] ?? 0) > Net.seen[i]; });
-  return inp;
-}
-function consumeRemoteEdges() {
-  if (G.mode === 'host' && Net.remote.c) Net.seen = Net.remote.c.slice();
-}
-
-const r3 = (n) => Math.round(n * 1000) / 1000;
-function snapFighter(f) {
-  return [r3(f.pos.x), r3(f.pos.y), r3(f.pos.z), r3(f.root.rotation.y), r3(f.body.rotation.x), r3(f.body.position.y),
-    r3(f.hp), r3(f.meter), f.combo, f.stun > 0 ? 1 : 0, r3(Math.max(0, f.flash)), ...POSE_KEYS.map((k) => r3(f.pose[k])), f.atk ? 1 : 0];
-}
-function sendSnapshot() {
-  if (!Net.conn?.open) return;
-  Net.conn.send({ t: 's', g: [G.phase, r3(G.timer), G.round, G.wins[0], G.wins[1]], f: [snapFighter(F[0]), snapFighter(F[1])], e: Net.events });
-  Net.events = [];
-}
-
-function guestStep(dt) {
-  // Send our input (P1 controls, mapped through our camera, which matches the host's).
-  if (Net.conn?.open) {
-    const it = readIntent('solo', 0);
-    BTN.forEach((k, i) => { if (it[k]) Net.counts[i]++; });
-    const w = intentToWorld(it);
-    Net.conn.send({ t: 'in', mx: r3(w.move.x), mz: r3(w.move.z), block: it.block, c: Net.counts.slice() });
-  }
-  const s = Net.snap;
-  if (!s) return;
-  [G.phase, G.timer, G.round, G.wins[0], G.wins[1]] = s.g;
-  const k = damp(30, dt);
-  s.f.forEach((d, i) => {
-    const f = F[i];
-    f.pos.x += (d[0] - f.pos.x) * k;
-    f.pos.y += (d[1] - f.pos.y) * k;
-    f.pos.z += (d[2] - f.pos.z) * k;
-    f.root.rotation.y = lerpAngle(f.root.rotation.y, d[3], k);
-    f.body.rotation.x += (d[4] - f.body.rotation.x) * k;
-    f.body.position.y += (d[5] - f.body.position.y) * k;
-    f.hp = d[6]; f.meter = d[7]; f.combo = d[8]; f.stun = d[9] ? 1 : 0; f.flash = d[10];
-    POSE_KEYS.forEach((key, j) => { f.pose[key] += (d[11 + j] - f.pose[key]) * k; });
-    f.clock += dt;
-    f.applyPose();
-    f.applyFlash();
-  });
-}
-
-// =====================================================================
-// Menu, pause, meta keys
-// =====================================================================
 function toMenu() {
-  G.mode = 'menu';
-  G.phase = 'menu';
-  G.paused = false;
+  A.mode = 'menu';
+  A.S = null;
+  A.paused = false;
+  A.lobbyRole = null;
   $('#menu').hidden = false;
+  $('#lobby').hidden = true;
   $('#pause').hidden = true;
   $('#hud').hidden = true;
+  $('#netTag').hidden = true;
   clearAnnounce();
-  F[0].reset(-2.4);
-  F[1].reset(2.4);
 }
-function quitToMenu() {
-  if (Net.role) { closeNet(); setStatus(''); }
-  toMenu();
-}
+function quitToMenu() { NBNet.close(); toMenu(); setStatus(''); }
 function setPaused(p) {
-  G.paused = p;
+  A.paused = p;
   $('#pause').hidden = !p;
   if (p) $('#btnResume').focus();
 }
 
-function onMetaKey(code) {
-  if (G.phase === 'menu') return;
-  if (code === 'Escape' || code === 'KeyP') {
-    if (G.phase === 'over' || G.mode === 'host' || G.mode === 'guest') {
-      if (code === 'Escape') quitToMenu();
-    } else setPaused(!G.paused);
-  }
-  if (code === 'Enter' && G.phase === 'over') rematch();
+function showLobby(role) {
+  A.lobbyRole = role;
+  $('#menu').hidden = true;
+  $('#lobby').hidden = false;
+  renderLobby(null);
 }
-function rematch() {
-  if (G.mode === 'guest') Net.conn?.send({ t: 'rematch' });
-  else startMatch(G.mode);
+let lastLobby = null;
+function renderLobby(info) {
+  lastLobby = info;
+  if (!A.lobbyRole) return;
+  const host = A.lobbyRole === 'host';
+  $('#lobbyRole').textContent = host ? 'Hosting' : 'Joined';
+  $('#lobbyCode').textContent = info?.code || '·····'; // only once the room is actually open
+  $('#lobbyHelp').textContent = host
+    ? 'Share the code. Up to 3 friends can join from a computer or an Apple Watch.'
+    : 'Waiting for the host to start the match.';
+  const players = info?.players || (host ? ['desktop'] : []);
+  const you = host ? 0 : info?.you ?? -1;
+  const list = $('#lobbyList');
+  list.innerHTML = '';
+  players.forEach((client, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="c" style="color:${hexStr(ROSTER[i].color)}">${ROSTER[i].name}</span><span class="dev">${client === 'watch' ? 'Apple Watch' : 'computer'}${i === you ? ' · you' : ''}${i === 0 ? ' · host' : ''}</span>`;
+    list.appendChild(li);
+  });
+  const n = Math.min(4, Math.max(A.opts.onlineFighters, players.length));
+  for (let i = players.length; i < n; i++) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="c" style="color:${hexStr(ROSTER[i].color)}">${ROSTER[i].name}</span><span class="dev">CPU</span>`;
+    list.appendChild(li);
+  }
+  $('#lobbyFighters').hidden = !host;
+  const start = $('#btnStartOnline');
+  start.hidden = !host;
+  start.disabled = !host || players.length < 2;
+  if (host && players.length < 2) $('#lobbyNote').textContent = info ? 'Waiting for someone to join…' : 'Opening a room…';
+  else if (host) $('#lobbyNote').textContent = n > players.length ? 'Empty spots are filled by CPU fighters.' : '';
 }
 
-$('#btnCpu').addEventListener('click', () => { closeNet(); setStatus(''); startMatch('cpu'); });
-$('#btnLocal').addEventListener('click', () => { closeNet(); setStatus(''); startMatch('local'); });
-$('#btnHost').addEventListener('click', hostOnline);
-$('#joinForm').addEventListener('submit', (e) => { e.preventDefault(); joinOnline($('#joinCode').value); });
-document.querySelectorAll('.diff button').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('.diff button').forEach((x) => x.classList.toggle('on', x === b));
-  G.difficulty = b.dataset.diff;
-}));
+NBNet.h = {
+  status: (t) => setStatus(t),
+  lobby: (info) => renderLobby(info),
+  joined: () => { setStatus(''); showLobby('guest'); },
+  start: (msg) => guestStart(msg),
+  snap: (msg) => {
+    if (A.mode !== 'guest') return;
+    A.snap = msg;
+    for (const [type, a] of msg.e) runFx(type, a);
+  },
+  rematch: () => { if (A.mode === 'host' && A.S?.phase === 'over') hostStart(); },
+  left: (fidx) => {
+    const f = A.mode === 'host' && A.S?.fighters[fidx];
+    if (f) { f.kind = 'cpu'; f.label = 'CPU'; }
+  },
+  closed: (t) => { toMenu(); setStatus(t); },
+};
+
+function setNetTag() {
+  const t = $('#netTag');
+  t.hidden = !(A.mode === 'host' || A.mode === 'guest');
+  t.textContent = A.mode === 'host' ? `ONLINE · ROOM ${NBNet.code} · YOU HOST` : `ONLINE · ROOM ${NBNet.code}`;
+}
+
+function onMetaKey(code) {
+  if (!$('#lobby').hidden && code === 'Escape') { quitToMenu(); return; }
+  if (A.mode === 'menu') return;
+  if (code === 'Enter' && A.S?.phase === 'over') { rematch(); return; }
+  if (code === 'Escape' || code === 'KeyP') {
+    if (A.mode === 'local' && A.S?.phase !== 'over') setPaused(!A.paused);
+    else if (code === 'Escape') quitToMenu();
+  }
+}
+
+$('#btnPlay').addEventListener('click', startLocal);
+$('#btnHost').addEventListener('click', () => { initAudio(); showLobby('host'); NBNet.host('desktop'); });
+$('#joinForm').addEventListener('submit', (e) => { e.preventDefault(); initAudio(); NBNet.join($('#joinCode').value, 'desktop'); });
+$('#btnStartOnline').addEventListener('click', hostStart);
+$('#btnLeaveLobby').addEventListener('click', quitToMenu);
 $('#btnResume').addEventListener('click', () => setPaused(false));
 $('#btnQuit').addEventListener('click', quitToMenu);
 
 // =====================================================================
 // HUD
 // =====================================================================
-const hud = [0, 1].map((i) => ({
-  hp: $(`#hp${i + 1}`), trail: $(`#trail${i + 1}`), meter: $(`#m${i + 1}`), pips: $(`#pips${i + 1}`).children,
-  combo: $(`#combo${i + 1}`), trailV: 100, shownCombo: 0,
-}));
+let hud = [];
+function buildHud(S) {
+  const bars = $('#bars');
+  bars.innerHTML = '';
+  bars.style.setProperty('--n', S.fighters.length);
+  hud = S.fighters.map((f) => {
+    const el = document.createElement('div');
+    el.className = 'side';
+    el.style.setProperty('--c', hexStr(f.color));
+    el.innerHTML = `<div class="name-row"><span class="name">${f.name}</span><span class="ptag"></span><span class="pips"><i></i><i></i></span></div>
+      <div class="hp"><div class="trail"></div><div class="fill"></div></div>
+      <div class="meter"><div></div><span>SUPER</span></div><div class="combo"></div>`;
+    bars.appendChild(el);
+    return {
+      el, fill: el.querySelector('.fill'), trail: el.querySelector('.trail'), meter: el.querySelector('.meter'),
+      mfill: el.querySelector('.meter > div'), pips: el.querySelector('.pips').children, combo: el.querySelector('.combo'),
+      tag: el.querySelector('.ptag'), trailV: 100, shownCombo: 0,
+    };
+  });
+}
+function tagFor(f) {
+  if (A.you.includes(f.idx)) return A.you.length === 1 ? 'YOU' : f.label;
+  return f.label === 'CPU' ? '' : f.label;
+}
 const timerEl = $('#timer');
-function updateHud(dt) {
-  F.forEach((f, i) => {
+function updateHud(S, dt) {
+  S.fighters.forEach((f, i) => {
     const h = hud[i];
-    h.hp.style.width = `${f.hp}%`;
-    h.hp.classList.toggle('low', f.hp < 30);
+    if (!h) return;
+    h.fill.style.width = `${f.hp}%`;
+    h.fill.classList.toggle('low', f.hp < 30);
     h.trailV = h.trailV > f.hp ? Math.max(f.hp, h.trailV - dt * 35) : f.hp;
     h.trail.style.width = `${h.trailV}%`;
-    h.meter.style.width = `${f.meter}%`;
-    h.meter.parentElement.classList.toggle('full', f.meter >= 100);
-    for (let p = 0; p < 2; p++) h.pips[p].classList.toggle('won', G.wins[i] > p);
-    const opp = F[1 - i];
-    const live = f.combo >= 2 && opp.stun > 0;
+    h.mfill.style.width = `${f.meter}%`;
+    h.meter.classList.toggle('full', f.meter >= 100);
+    h.el.classList.toggle('out', f.state === 'ko' && S.phase === 'fight');
+    for (let p = 0; p < 2; p++) h.pips[p].classList.toggle('won', f.wins > p);
+    const tag = tagFor(f) || (f.label === 'CPU' ? 'CPU' : '');
+    if (h.tag.textContent !== tag) h.tag.textContent = tag;
+    h.tag.classList.toggle('you', tag === 'YOU');
+    const live = f.combo >= 2 && S.fighters.some((o) => o !== f && o.stun > 0);
     if (live && f.combo !== h.shownCombo) { h.combo.innerHTML = `${f.combo} HITS<small>COMBO</small>`; h.shownCombo = f.combo; }
     h.combo.classList.toggle('show', live);
     if (!live) h.shownCombo = 0;
   });
-  const t = Math.ceil(G.timer);
+  const t = Math.ceil(S.timer);
   timerEl.textContent = t;
-  timerEl.classList.toggle('low', t <= 10 && G.phase === 'fight');
+  timerEl.classList.toggle('low', t <= 10 && S.phase === 'fight');
+  if (S.phase === 'over' && !A.overShown) {
+    A.overShown = true;
+    subEl.textContent = A.mode === 'guest' ? 'ENTER: ASK FOR REMATCH · ESC: LEAVE' : 'ENTER: REMATCH · ESC: MENU';
+  } else if (S.phase !== 'over' && A.overShown) {
+    A.overShown = false;
+  }
 }
 
 // =====================================================================
-// Camera
+// Camera: frames every fighter still standing
 // =====================================================================
 const camSide = V(0, 0, 1);
 const camTarget = V(0, 1.2, 0);
 const camPos = V(0, 3, 9);
-function updateCamera(dt) {
-  const a = F[0].pos, b = F[1].pos;
-  if (G.phase === 'menu') {
+function updateCamera(S, dt) {
+  if (!S || A.mode === 'menu') {
     const t = performance.now() / 1000;
     camPos.set(Math.sin(t * 0.15) * 8.5, 2.6 + Math.sin(t * 0.3) * 0.4, Math.cos(t * 0.15) * 8.5);
     camTarget.set(0, 1.1, 0);
     camera.position.lerp(camPos, damp(3, dt));
   } else {
-    const mid = V().addVectors(a, b).multiplyScalar(0.5);
-    const dx = b.x - a.x, dz = b.z - a.z;
-    const sep = Math.hypot(dx, dz) || 1;
-    const perp = V(-dz / sep, 0, dx / sep);
-    // Stay on the same side if the fighters swap places, so the camera never whips around.
-    if (perp.dot(camSide) < 0) perp.negate();
-    camSide.lerp(perp, damp(4, dt)).normalize();
-    const dist = clamp(4.6 + sep * 0.95, 5.6, 12);
+    let F = S.fighters.filter((f) => f.state !== 'ko');
+    if (F.length < 2) F = S.fighters;
+    const mid = V();
+    for (const f of F) mid.add(V(f.x, 0, f.z));
+    mid.multiplyScalar(1 / F.length);
+    let spread = 0, maxY = 0;
+    for (const f of F) { spread = Math.max(spread, Math.hypot(f.x - mid.x, f.z - mid.z)); maxY = Math.max(maxY, f.y); }
+    if (F.length === 2) {
+      const dx = F[1].x - F[0].x, dz = F[1].z - F[0].z, sep = Math.hypot(dx, dz) || 1;
+      const perp = V(-dz / sep, 0, dx / sep);
+      // Stay on the same side if the fighters swap places, so the camera never whips around.
+      if (perp.dot(camSide) < 0) perp.negate();
+      camSide.lerp(perp, damp(4, dt)).normalize();
+    }
+    const dist = clamp(4.6 + spread * 1.9, 5.6, 14);
     const desired = V().copy(mid).addScaledVector(camSide, dist);
-    desired.y = 2.2 + sep * 0.12 + Math.max(a.y, b.y) * 0.3;
+    desired.y = 2.2 + spread * 0.25 + maxY * 0.3;
     camPos.lerp(desired, damp(6, dt));
     camera.position.copy(camPos);
-    camTarget.lerp(V(mid.x, 1.15 + Math.max(a.y, b.y) * 0.4, mid.z), damp(8, dt));
+    camTarget.lerp(V(mid.x, 1.15 + maxY * 0.4, mid.z), damp(8, dt));
   }
   if (shake > 0.002) camera.position.add(V((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake));
   camera.lookAt(camTarget);
@@ -1159,42 +800,58 @@ function updateCamera(dt) {
 // Main loop
 // =====================================================================
 let last = performance.now();
-let sendAcc = 0;
+let startWas = false;
 function frame(now) {
   requestAnimationFrame(frame);
   const rdt = Math.min((now - last) / 1000, 1 / 30);
   last = now;
-  lastDt = rdt;
+  const S = A.S;
 
-  // Start button on a gamepad pauses (local only).
-  if (G.phase !== 'menu' && (G.mode === 'cpu' || G.mode === 'local')) {
+  if (A.mode === 'local') {
     const pad = navigator.getGamepads ? [...navigator.getGamepads()].find(Boolean) : null;
-    const st = pad?.buttons[9]?.pressed;
-    if (st && !frame.startWas) setPaused(!G.paused);
-    frame.startWas = st;
+    const st = !!pad?.buttons[9]?.pressed;
+    if (st && !startWas && S.phase !== 'over') setPaused(!A.paused);
+    startWas = st;
   }
 
-  if (G.mode === 'guest') {
-    guestStep(rdt);
-  } else if (G.phase === 'menu') {
-    F[0].update(rdt, NO_INPUT, F[1]);
-    F[1].update(rdt, NO_INPUT, F[0]);
-  } else if (!G.paused) {
-    stepGame(rdt);
-    if (G.mode === 'host') {
-      sendAcc += rdt;
-      if (sendAcc >= 1 / 60 - 1e-4) { sendAcc = 0; sendSnapshot(); }
+  if (A.mode === 'menu') {
+    NBSim.idle(A.menuS, rdt);
+  } else if (A.mode === 'guest') {
+    NBNet.sendInput(readHuman(A.humans[0]));
+    if (A.snap) NBSim.applySnap(S, A.snap, damp(20, rdt), rdt);
+  } else if (!A.paused) {
+    const inputs = S.fighters.map((f, i) => {
+      const h = A.humans.find((x) => x.fidx === i);
+      if (h) return readHuman(h);
+      if (A.mode === 'host' && f.kind === 'remote') return NBNet.inputFor(i) || NONE;
+      return NONE;
+    });
+    NBSim.step(S, rdt, inputs);
+    if (A.mode === 'host') NBNet.consumeInputs();
+    const ev = drain(S);
+    if (A.mode === 'host') {
+      A.pending.push(...ev);
+      A.sendAcc += rdt;
+      if (A.sendAcc >= 1 / 30) { A.sendAcc = 0; NBNet.sendSnap(NBSim.pack(S, A.pending)); A.pending = []; }
     }
   }
   pressed.clear();
 
-  updateFx(G.paused ? 0 : rdt);
-  updateCamera(rdt);
-  if (G.phase !== 'menu') updateHud(rdt);
+  const shown = A.mode === 'menu' ? A.menuS : S;
+  views.forEach((v, i) => {
+    const f = shown.fighters[i];
+    if (!f) { v.root.visible = false; return; }
+    v.sync(f);
+    v.setTag(A.mode === 'menu' ? '' : tagFor(f));
+  });
+
+  updateFx(A.paused ? 0 : rdt);
+  updateCamera(A.mode === 'menu' ? null : S, rdt);
+  if (A.mode !== 'menu') updateHud(S, rdt);
   dust.rotation.y += rdt * 0.01;
   renderer.render(scene, camera);
 }
 requestAnimationFrame(frame);
 
 // Handy for debugging in the console.
-window.NB = { G, F, Net };
+window.NB = { A, NBSim, NBNet };

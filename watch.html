@@ -23,31 +23,39 @@
     background: rgba(255, 255, 255, 0.08); color: var(--fg); font: 700 15px -apple-system, system-ui, sans-serif; padding: 0; touch-action: none; }
   #pad button.on { background: rgba(255, 255, 255, 0.28); }
   #pad .atk { color: var(--gold); }
-  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-    gap: 8px; padding: 12px; text-align: center; background: rgba(7, 6, 15, 0.82); overflow-y: auto; touch-action: pan-y; }
-  .overlay > * { flex-shrink: 0; }
-  .overlay > :first-child { margin-top: auto; }
-  .overlay > :last-child { margin-bottom: auto; }
-  .join { display: flex; gap: 4px; width: 100%; max-width: 220px; }
-  .join input { flex: 1; min-width: 0; height: 34px; border-radius: 17px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.5);
-    color: var(--fg); font: 700 15px -apple-system, system-ui, sans-serif; letter-spacing: 0.12em; text-align: center; text-transform: uppercase; padding: 0 6px; -webkit-user-select: text; user-select: text; }
-  .join input::placeholder { letter-spacing: 0; text-transform: none; color: var(--muted); font-weight: 600; font-size: 13px; }
-  .overlay .join button { width: auto; padding: 0 12px; height: 34px; font-size: 14px; background: var(--p2); }
-  #netMsg { color: var(--gold); min-height: 0; }
-  #netMsg:empty { display: none; }
-  .overlay h2 { margin: 0; font-size: 22px; font-weight: 900; }
-  .logo { margin: 0; font-size: 26px; line-height: 0.95; font-weight: 900; letter-spacing: 0.02em; color: var(--p1); }
-  .logo span { display: block; color: var(--p2); }
-  .overlay button { width: 100%; max-width: 220px; height: 42px; border-radius: 21px; border: 0;
-    font: 700 16px -apple-system, system-ui, sans-serif; color: #14040b; background: var(--p1); }
-  .overlay button.alt { background: rgba(255, 255, 255, 0.12); color: var(--fg); border: 1px solid var(--line); font-size: 14px; height: 34px; }
-  .overlay p { margin: 0; font-size: 11px; line-height: 1.35; color: var(--muted); max-width: 220px; }
-  #bS { position: fixed; left: 50%; top: calc(max(6px, 3vh) + 34px); transform: translateX(-50%);
+  #bS { position: fixed; left: 50%; bottom: 50px; transform: translateX(-50%);
     width: 58%; max-width: 160px; height: 34px; border: 0; border-radius: 17px; padding: 0;
     background: var(--gold); color: #1a1000; font: 900 15px -apple-system, system-ui, sans-serif; letter-spacing: 0.06em;
     box-shadow: 0 0 14px rgba(255, 209, 102, 0.7); touch-action: none; animation: glow 0.5s infinite alternate; }
   #bS.on { transform: translateX(-50%) scale(0.94); }
   @keyframes glow { from { box-shadow: 0 0 6px rgba(255, 209, 102, 0.5); } to { box-shadow: 0 0 18px rgba(255, 209, 102, 0.95); } }
+
+  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+    gap: 7px; padding: 12px; text-align: center; background: rgba(7, 6, 15, 0.86); overflow-y: auto; touch-action: pan-y; }
+  .overlay > * { flex-shrink: 0; }
+  .overlay > :first-child { margin-top: auto; }
+  .overlay > :last-child { margin-bottom: auto; }
+  .logo { margin: 0; font-size: 26px; line-height: 0.95; font-weight: 900; letter-spacing: 0.02em; color: var(--p1); }
+  .logo span { display: block; color: var(--p2); }
+  .overlay button { width: 100%; max-width: 220px; height: 40px; border-radius: 20px; border: 0;
+    font: 700 16px -apple-system, system-ui, sans-serif; color: #14040b; background: var(--p1); }
+  .overlay button.alt { background: rgba(255, 255, 255, 0.12); color: var(--fg); border: 1px solid var(--line); font-size: 14px; height: 34px; }
+  .overlay button.blue { background: var(--p2); }
+  .overlay button:disabled { opacity: 0.4; }
+  .overlay p { margin: 0; font-size: 11px; line-height: 1.35; color: var(--muted); max-width: 220px; }
+  .overlay h2 { margin: 0; font-size: 22px; font-weight: 900; }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.15em; font-weight: 700; }
+  .sep { width: 100%; max-width: 220px; height: 1px; background: var(--line); margin: 3px 0; }
+  .join { display: flex; gap: 4px; width: 100%; max-width: 220px; }
+  .join input { flex: 1; min-width: 0; height: 34px; border-radius: 17px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.5);
+    color: var(--fg); font: 700 15px -apple-system, system-ui, sans-serif; letter-spacing: 0.12em; text-align: center; text-transform: uppercase; padding: 0 6px; -webkit-user-select: text; user-select: text; }
+  .join input::placeholder { letter-spacing: 0; text-transform: none; color: var(--muted); font-weight: 600; font-size: 13px; }
+  .overlay .join button { width: auto; padding: 0 12px; height: 34px; font-size: 14px; background: var(--p2); }
+  .msg { color: var(--gold) !important; }
+  .msg:empty { display: none; }
+  #lbCode { color: var(--gold); letter-spacing: 0.12em; font-size: 26px; -webkit-user-select: text; user-select: text; }
+  #lbList { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 13px; font-weight: 700; width: 100%; max-width: 220px; }
+  #lbList small { color: var(--muted); font-weight: 600; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -66,13 +74,27 @@
 <div id="menu" class="overlay">
   <h1 class="logo">NEON<span>BRAWL</span></h1>
   <button id="go">Fight</button>
+  <button id="fighters" class="alt">Fighters: 2</button>
   <button id="diff" class="alt">CPU: Normal</button>
+  <div class="sep"></div>
+  <button id="host" class="blue">Host room</button>
   <form id="joinForm" class="join">
     <input id="code" maxlength="5" placeholder="Room code" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Room code">
     <button type="submit">Join</button>
   </form>
-  <p id="netMsg" aria-live="polite"></p>
-  <p>Hold back to block. Tap the arena to jump. When your meter is full, tap SUPER. To play a friend online, enter the room code from their screen.</p>
+  <p id="netMsg" class="msg" aria-live="polite"></p>
+  <p>◀ ▶ walk toward or away from the nearest fighter. Holding away blocks. Tap the arena to jump. Tap SUPER when your meter is full. Rooms work with friends on computers or watches.</p>
+</div>
+
+<div id="lobby" class="overlay" hidden>
+  <p class="eyebrow" id="lbRole">Hosting</p>
+  <h2 id="lbCode">·····</h2>
+  <p id="lbHelp"></p>
+  <ol id="lbList"></ol>
+  <button id="lbFighters" class="alt">Fighters: 2</button>
+  <button id="lbStart">Start</button>
+  <p id="lbNote" class="msg"></p>
+  <button id="lbLeave" class="alt">Leave</button>
 </div>
 
 <div id="over" class="overlay" hidden>
@@ -81,6 +103,8 @@
   <button id="bLeave" class="alt">Leave</button>
 </div>
 
+<script src="sim.js"></script>
+<script src="net.js"></script>
 <script src="watch.js"></script>
 </body>
 </html>

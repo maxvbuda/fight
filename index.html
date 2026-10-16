@@ -21,21 +21,8 @@
 <body>
 
 <div id="hud" hidden>
-  <div class="bars">
-    <div class="side p1">
-      <div class="name-row"><span class="name" id="n1">RYKA</span><span class="pips" id="pips1"><i></i><i></i></span></div>
-      <div class="hp"><div class="trail" id="trail1"></div><div class="fill" id="hp1"></div></div>
-      <div class="meter"><div id="m1"></div><span>SUPER</span></div>
-    </div>
-    <div id="timer">99</div>
-    <div class="side p2">
-      <div class="name-row"><span class="pips" id="pips2"><i></i><i></i></span><span class="name" id="n2">VOLT</span></div>
-      <div class="hp"><div class="trail" id="trail2"></div><div class="fill" id="hp2"></div></div>
-      <div class="meter"><div id="m2"></div><span>SUPER</span></div>
-    </div>
-  </div>
-  <div class="combo p1" id="combo1"></div>
-  <div class="combo p2" id="combo2"></div>
+  <div id="timer">99</div>
+  <div id="bars"></div>
   <div id="netTag" hidden></div>
 </div>
 
@@ -45,36 +32,37 @@
 <div id="menu" class="overlay">
   <div class="menu-card">
     <h1 class="logo">NEON<span>BRAWL</span></h1>
-    <p class="tag">Two fighters. One ring. First to two rounds.</p>
+    <p class="tag">Up to four fighters. One ring. First to two rounds.</p>
 
-    <div class="modes">
-      <div class="mode">
-        <button id="btnCpu" class="primary">Fight the CPU</button>
-        <div class="diff" role="radiogroup" aria-label="CPU difficulty">
-          <button data-diff="easy">Easy</button>
-          <button data-diff="normal" class="on">Normal</button>
-          <button data-diff="hard">Hard</button>
-        </div>
-      </div>
-      <div class="mode">
-        <button id="btnLocal">2 players, one keyboard</button>
-      </div>
-      <div class="mode online">
-        <button id="btnHost">Host online match</button>
+    <section class="panel">
+      <h3>Play on this computer</h3>
+      <div class="row"><span class="lbl">Fighters</span>
+        <div class="seg" data-key="fighters"><button data-v="2" class="on">2</button><button data-v="3">3</button><button data-v="4">4</button></div></div>
+      <div class="row"><span class="lbl">Players here</span>
+        <div class="seg" data-key="humans"><button data-v="1" class="on">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button></div></div>
+      <div class="row"><span class="lbl">CPU</span>
+        <div class="seg" data-key="diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
+      <p class="note" id="localNote"></p>
+      <button id="btnPlay" class="primary">Start fight</button>
+    </section>
+
+    <section class="panel">
+      <h3>Play online</h3>
+      <div class="row">
+        <button id="btnHost">Host a room</button>
         <form id="joinForm" class="join">
           <input id="joinCode" maxlength="5" placeholder="Room code" autocomplete="off" spellcheck="false" aria-label="Room code">
           <button type="submit">Join</button>
         </form>
-        <p id="netStatus" aria-live="polite"></p>
       </div>
-    </div>
+      <p id="netStatus" aria-live="polite"></p>
+    </section>
 
     <div class="controls">
       <div>
-        <h3>Player 1 / solo / online</h3>
+        <h3>Player 1 (and online)</h3>
         <dl>
-          <dt>Move</dt><dd><kbd>A</kbd><kbd>D</kbd></dd>
-          <dt>Sidestep</dt><dd><kbd>W</kbd><kbd>S</kbd></dd>
+          <dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd>
           <dt>Jump</dt><dd><kbd>Space</kbd></dd>
           <dt>Punch</dt><dd><kbd>J</kbd> or <kbd>F</kbd></dd>
           <dt>Kick</dt><dd><kbd>K</kbd> or <kbd>G</kbd></dd>
@@ -83,10 +71,9 @@
         </dl>
       </div>
       <div>
-        <h3>Player 2 (local)</h3>
+        <h3>Player 2</h3>
         <dl>
-          <dt>Move</dt><dd><kbd>←</kbd><kbd>→</kbd></dd>
-          <dt>Sidestep</dt><dd><kbd>↑</kbd><kbd>↓</kbd></dd>
+          <dt>Move</dt><dd><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></dd>
           <dt>Jump</dt><dd><kbd>Right Shift</kbd> / <kbd>Num 0</kbd></dd>
           <dt>Punch</dt><dd><kbd>,</kbd> / <kbd>Num 1</kbd></dd>
           <dt>Kick</dt><dd><kbd>.</kbd> / <kbd>Num 2</kbd></dd>
@@ -95,7 +82,23 @@
         </dl>
       </div>
     </div>
-    <p class="hint">Gamepads work too: stick to move, A jump, X punch, Y kick, RB block, B super. Land a hit, then press punch or kick again to chain a combo. <kbd>Esc</kbd> pauses.</p>
+    <p class="hint">Players 3 and 4 use gamepads (gamepad 1 also works for player 1, gamepad 2 for player 2): stick to move, A jump, X punch, Y kick, RB block, B super. Your fighter faces the nearest opponent. Land a hit, then press punch or kick again to chain a combo. <kbd>Esc</kbd> pauses.</p>
+  </div>
+</div>
+
+<div id="lobby" class="overlay" hidden>
+  <div class="menu-card lobby-card">
+    <p class="eyebrow" id="lobbyRole">Hosting</p>
+    <h2>Room <span id="lobbyCode">·····</span></h2>
+    <p class="note" id="lobbyHelp"></p>
+    <ol id="lobbyList"></ol>
+    <div class="row" id="lobbyFighters"><span class="lbl">Fighters</span>
+      <div class="seg" data-key="onlineFighters"><button data-v="2" class="on">2</button><button data-v="3">3</button><button data-v="4">4</button></div></div>
+    <p class="note" id="lobbyNote"></p>
+    <div class="row">
+      <button id="btnStartOnline" class="primary">Start match</button>
+      <button id="btnLeaveLobby">Leave</button>
+    </div>
   </div>
 </div>
 
@@ -107,7 +110,8 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="sim.js"></script>
+<script src="net.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
