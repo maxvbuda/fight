@@ -73,6 +73,7 @@
       f.vx = f.vy = f.vz = 0;
       f.hp = 100; f.state = 'idle'; f.atk = null; f.stun = 0; f.combo = 0; f.flash = 0;
       f.lastPunch = 'cross'; f.punchT = 0; f.bodyRx = 0; f.bodyY = 0; f.attacking = false;
+      if (f.kind === 'gone') { f.hp = 0; f.state = 'ko'; }
       var d = Math.sqrt(f.x * f.x + f.z * f.z) || 1;
       f.dirX = -f.x / d; f.dirZ = -f.z / d;
       f.yaw = Math.atan2(f.dirX, f.dirZ);
@@ -101,6 +102,7 @@
   }
 
   function rematch(S) {
+    if (present(S).length < 2) return;
     S.round = 1;
     S.fighters.forEach(function (f) { f.wins = 0; f.meter = 0; });
     startRound(S);
@@ -268,6 +270,31 @@
       emit(S, 'announce', ['K.O.', 'ko']);
     } else {
       emit(S, 'announce', [def.name + ' OUT', 'go']);
+    }
+  }
+
+  function present(S) { return S.fighters.filter(function (f) { return f.kind !== 'gone'; }); }
+
+  // A player left an online match: they forfeit and stay out for the rest of it.
+  function forfeit(S, fidx) {
+    var f = S.fighters[fidx];
+    if (!f || f.kind === 'gone') return;
+    f.kind = 'gone'; f.label = 'LEFT'; f.hp = 0; f.state = 'ko'; f.atk = null; f.stun = 0; f.meter = 0;
+    if (S.phase === 'over') return;
+    var left = present(S);
+    if (left.length <= 1) {
+      // Nobody left to fight: the last player wins the match.
+      var w = left[0];
+      if (S.phase !== 'ko') endRound(S, w ? w.idx : -1);
+      else S.winner = w ? w.idx : -1;
+      if (w) w.wins = 2;
+      emit(S, 'announce', [f.name + ' LEFT', 'ko']);
+      return;
+    }
+    emit(S, 'announce', [f.name + ' LEFT', 'go']);
+    if (S.phase === 'fight') {
+      var alive = S.fighters.filter(function (o) { return o.state !== 'ko'; });
+      if (alive.length <= 1) endRound(S, alive.length ? alive[0].idx : -1);
     }
   }
 
@@ -452,7 +479,7 @@
       t: 's', g: [S.phase, r3(S.timer), S.round],
       f: S.fighters.map(function (f) {
         var a = [r3(f.x), r3(f.y), r3(f.z), r3(f.yaw), r3(f.bodyRx), r3(f.bodyY), r3(f.hp), r3(f.meter),
-          f.combo, f.stun > 0 ? 1 : 0, r3(Math.max(0, f.flash)), f.atk ? 1 : 0, f.wins, f.state === 'ko' ? 1 : 0];
+          f.combo, f.stun > 0 ? 1 : 0, r3(Math.max(0, f.flash)), f.atk ? 1 : 0, f.wins, f.kind === 'gone' ? 2 : f.state === 'ko' ? 1 : 0];
         for (var i = 0; i < POSE_KEYS.length; i++) a.push(r3(f.pose[POSE_KEYS[i]]));
         return a;
       }),
@@ -469,13 +496,14 @@
       f.bodyRx += (d[4] - f.bodyRx) * k; f.bodyY += (d[5] - f.bodyY) * k;
       f.hp = d[6]; f.meter = d[7]; f.combo = d[8]; f.stun = d[9] ? 1 : 0; f.flash = d[10];
       f.attacking = !!d[11]; f.wins = d[12]; f.state = d[13] ? 'ko' : 'idle';
+      if (d[13] === 2 && f.kind !== 'gone') { f.kind = 'gone'; f.label = 'LEFT'; }
       for (var j = 0; j < POSE_KEYS.length; j++) f.pose[POSE_KEYS[j]] += (d[BASE + j] - f.pose[POSE_KEYS[j]]) * k;
       f.clock += dt;
     });
   }
 
   window.NBSim = {
-    ARENA_R: ARENA_R, ROSTER: ROSTER, MOVES: MOVES, POSE_KEYS: POSE_KEYS, NONE: NONE,
+    ARENA_R: ARENA_R, ROSTER: ROSTER, forfeit: forfeit, MOVES: MOVES, POSE_KEYS: POSE_KEYS, NONE: NONE,
     createMatch: createMatch, rematch: rematch, step: step, idle: idle, nearest: nearest,
     pack: pack, applySnap: applySnap, clamp: clamp, damp: damp, lerpAngle: lerpAngle
   };

@@ -260,7 +260,7 @@
     rematch: function () { if (A.mode === 'host' && A.S && A.S.phase === 'over') hostStart(); },
     left: function (fidx) {
       var f = A.mode === 'host' && A.S && A.S.fighters[fidx];
-      if (f) { f.kind = 'cpu'; f.label = 'CPU'; }
+      if (f) Sim.forfeit(A.S, fidx);
     },
     closed: function (t) { toMenu(); netMsg(t); }
   };
@@ -304,7 +304,7 @@
       camSide = [0, 0, 1];
     } else {
       var F = S.fighters.filter(function (f) { return f.state !== 'ko'; });
-      if (F.length < 2) F = S.fighters;
+      if (F.length < 2) F = S.fighters.filter(function (f) { return f.kind !== 'gone'; });
       var mx = 0, mz = 0, spread = 0, maxY = 0, i;
       for (i = 0; i < F.length; i++) { mx += F[i].x / F.length; mz += F[i].z / F.length; }
       for (i = 0; i < F.length; i++) {
@@ -464,7 +464,7 @@
   }
   function drawFighters(S) {
     var segs = [], i;
-    for (i = 0; i < S.fighters.length; i++) segments(S.fighters[i], segs);
+    for (i = 0; i < S.fighters.length; i++) if (S.fighters[i].kind !== 'gone') segments(S.fighters[i], segs);
     ctx.lineCap = 'round';
     // Faint mirror image in the glossy floor, clipped to the ring.
     ctx.save();
@@ -475,7 +475,7 @@
     ctx.restore();
     ctx.globalAlpha = 1;
     for (i = 0; i < S.fighters.length; i++) {
-      var f = S.fighters[i], c = project([f.x, 0, f.z]);
+      var f = S.fighters[i], c = f.kind !== 'gone' && project([f.x, 0, f.z]);
       if (!c) continue;
       var sc = FOCAL / c.z, col = LOOKS[f.idx].suit;
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -559,8 +559,9 @@
     for (var i = 0; i < n; i++) {
       var f = S.fighters[i], col = i % 2, row = Math.floor(i / 2);
       var x = col === 0 ? side : W - side - bw, y = y0 + row * (two ? 0 : 20);
-      var name = f.name + (i === A.me && A.mode !== 'menu' ? '·YOU' : '') + (f.wins ? ' ' + new Array(f.wins + 1).join('◆') : '');
-      ctx.globalAlpha = f.state === 'ko' && S.phase === 'fight' ? 0.4 : 1;
+      var gone = f.kind === 'gone';
+      var name = f.name + (gone ? ' · LEFT' : (i === A.me && A.mode !== 'menu' ? '·YOU' : '') + (f.wins ? ' ' + new Array(f.wins + 1).join('◆') : ''));
+      ctx.globalAlpha = gone ? 0.3 : f.state === 'ko' && S.phase === 'fight' ? 0.4 : 1;
       ctx.font = '700 ' + (two ? 10 : 8) + 'px -apple-system, system-ui, sans-serif';
       ctx.fillStyle = rgb(LOOKS[i].suit, 1);
       ctx.textAlign = col === 0 ? 'left' : 'right';

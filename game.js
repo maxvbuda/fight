@@ -1295,7 +1295,7 @@ NBNet.h = {
   rematch: () => { if (A.mode === 'host' && A.S?.phase === 'over') hostStart(); },
   left: (fidx) => {
     const f = A.mode === 'host' && A.S?.fighters[fidx];
-    if (f) { f.kind = 'cpu'; f.label = 'CPU'; }
+    if (f) NBSim.forfeit(A.S, fidx);
   },
   closed: (t) => { toMenu(); setStatus(t); },
 };
@@ -1362,7 +1362,7 @@ function updateHud(S, dt) {
     h.trail.style.width = `${h.trailV}%`;
     h.mfill.style.width = `${f.meter}%`;
     h.meter.classList.toggle('full', f.meter >= 100);
-    h.el.classList.toggle('out', f.state === 'ko' && S.phase === 'fight');
+    h.el.classList.toggle('out', f.kind === 'gone' || (f.state === 'ko' && S.phase === 'fight'));
     for (let p = 0; p < 2; p++) h.pips[p].classList.toggle('won', f.wins > p);
     const tag = tagFor(f) || (f.label === 'CPU' ? 'CPU' : '');
     if (h.tag.textContent !== tag) h.tag.textContent = tag;
@@ -1397,7 +1397,7 @@ function updateCamera(S, dt) {
     camera.position.lerp(camPos, damp(3, dt));
   } else {
     let F = S.fighters.filter((f) => f.state !== 'ko');
-    if (F.length < 2) F = S.fighters;
+    if (F.length < 2) F = S.fighters.filter((f) => f.kind !== 'gone');
     const mid = V();
     for (const f of F) mid.add(V(f.x, 0, f.z));
     mid.multiplyScalar(1 / F.length);
@@ -1469,7 +1469,7 @@ function frame(now) {
   const shown = A.mode === 'menu' ? A.menuS : S;
   views.forEach((v, i) => {
     const f = shown.fighters[i];
-    if (!f) { if (v.root.visible) v.hide(); return; }
+    if (!f || f.kind === 'gone') { if (v.root.visible) v.hide(); return; }
     v.sync(f, A.paused ? 0 : rdt);
     v.setTag(A.mode === 'menu' ? '' : tagFor(f));
   });

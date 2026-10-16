@@ -7,7 +7,7 @@ A 3D fighting game for up to four fighters. It runs in the browser on computers 
 ## Modes
 
 - **On this computer:** pick 2, 3 or 4 fighters and 1 to 4 players. CPU fighters (Easy, Normal or Hard) fill the empty spots. Players 1 and 2 share the keyboard, and players 3 and 4 use gamepads.
-- **Online rooms:** one player hosts and gets a 5-letter room code. Up to 3 friends join with the code from a computer or an Apple Watch, and any room can be hosted from either one. The host picks the number of fighters, and CPUs fill the empty spots. If someone leaves mid-match, a CPU takes over their fighter.
+- **Online rooms:** one player hosts and gets a 5-letter room code. Up to 3 friends join with the code from a computer or an Apple Watch, and any room can be hosted from either one. The host picks the number of fighters, and CPUs fill the empty spots. If someone leaves mid-match, they forfeit: their fighter leaves the ring for the rest of the match, and if only one fighter is left, that player wins.
 
 With 3 or 4 fighters it's a free-for-all. Each fighter faces the nearest opponent, and attacks hit anyone in front of them. The last fighter standing wins the round, and the first to win two rounds wins the match.
 
