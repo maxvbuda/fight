@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Neon Brawl</title>
 <script>
   // Tiny screens (Apple Watch) and browsers without WebGL get the lightweight watch edition.
@@ -35,10 +37,10 @@
     <p class="tag">Up to four fighters. One ring. First to two rounds.</p>
 
     <section class="panel">
-      <h3>Play on this computer</h3>
+      <h3 id="localTitle">Play on this computer</h3>
       <div class="row"><span class="lbl">Fighters</span>
         <div class="seg" data-key="fighters"><button data-v="2" class="on">2</button><button data-v="3">3</button><button data-v="4">4</button></div></div>
-      <div class="row"><span class="lbl">Players here</span>
+      <div class="row" id="humansRow"><span class="lbl">Players here</span>
         <div class="seg" data-key="humans"><button data-v="1" class="on">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button></div></div>
       <div class="row"><span class="lbl">CPU</span>
         <div class="seg" data-key="diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
@@ -57,6 +59,12 @@
       </div>
       <p id="netStatus" aria-live="polite"></p>
     </section>
+
+    <div class="phone-help">
+      <h3>Touch controls</h3>
+      <p>Drag anywhere on the left half to move. Right side: <b>P</b> punch, <b>K</b> kick, <b>JUMP</b>, hold <b>BLOCK</b>, and <b>SUPER</b> when your meter is full. Land a hit, then tap punch or kick again to chain a combo.</p>
+      <p class="rotate">Turn your phone sideways for a bigger view.</p>
+    </div>
 
     <div class="controls">
       <div>
@@ -102,9 +110,25 @@
   </div>
 </div>
 
+<div id="touch" hidden>
+  <div id="stick"><div id="knob"></div></div>
+  <div id="tbtns">
+    <button data-b="super" id="tSuper">Super</button>
+    <button data-b="block">Block</button>
+    <button data-b="jump">Jump</button>
+    <button data-b="kick" class="atk">K</button>
+    <button data-b="punch" class="atk">P</button>
+  </div>
+  <button id="tPause" aria-label="Pause">II</button>
+  <div id="tOver" hidden>
+    <button id="tAgain" class="primary">Rematch</button>
+    <button id="tMenu">Menu</button>
+  </div>
+</div>
+
 <div id="pause" class="overlay" hidden>
   <div class="menu-card small">
-    <h2>Paused</h2>
+    <h2 id="pauseTitle">Paused</h2>
     <button id="btnResume" class="primary">Resume</button>
     <button id="btnQuit">Quit to menu</button>
   </div>

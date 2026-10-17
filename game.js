@@ -21,10 +21,15 @@ function lerpAngle(a, b, t) {
 const glow = (hex, k) => new THREE.Color(hex).multiplyScalar(k);
 const TAU = Math.PI * 2;
 
+// Phones (touch screen, no mouse) get on-screen controls and a lighter renderer. ?phone forces it.
+const PHONE = /[?&]phone\b/.test(location.search) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
+document.documentElement.classList.toggle('phone', PHONE);
+const CLIENT = PHONE ? 'phone' : 'desktop';
+
 // =====================================================================
 // Renderer, post-processing, scene
 // =====================================================================
-const DPR = Math.min(devicePixelRatio, 1.75);
+const DPR = Math.min(devicePixelRatio, PHONE ? 1.5 : 1.75);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(DPR);
 renderer.setSize(innerWidth, innerHeight);
@@ -86,9 +91,15 @@ const grade = new ShaderPass({
 composer.addPass(grade);
 composer.addPass(new OutputPass());
 
-addEventListener('resize', () => {
+// Tall (portrait) screens widen the lens so the fighters still fit side to side.
+function fitCamera() {
   camera.aspect = innerWidth / innerHeight;
+  camera.fov = camera.aspect >= 1.3 ? 50 : Math.min(85, 2 * Math.atan(Math.tan(25 * Math.PI / 180) * 1.3 / camera.aspect) * 180 / Math.PI);
   camera.updateProjectionMatrix();
+}
+fitCamera();
+addEventListener('resize', () => {
+  fitCamera();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
 });
@@ -98,7 +109,7 @@ scene.add(new THREE.HemisphereLight(0x8c7cff, 0x140a1c, 0.45));
 const key = new THREE.DirectionalLight(0xfff1e8, 2.2);
 key.position.set(4, 14, 7);
 key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
+key.shadow.mapSize.set(PHONE ? 1024 : 2048, PHONE ? 1024 : 2048);
 Object.assign(key.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 1, far: 34 });
 key.shadow.bias = -0.0004;
 key.shadow.normalBias = 0.02;
@@ -1118,6 +1129,58 @@ function readPad(i) {
   return { mx, mz, jump: edge(0), super: edge(1), punch: edge(2), kick: edge(3), block: b(5) || b(4) || b(7) };
 }
 
+// Touch controls (phones): a floating stick on the left half, buttons on the right.
+const touch = { mx: 0, mz: 0, block: false, tap: {} };
+if (PHONE) {
+  const pad = $('#touch'), stick = $('#stick'), knob = $('#knob'), R = 50;
+  let sid = null, ox = 0, oy = 0;
+  const home = () => { stick.style.left = `${Math.max(90, innerWidth * 0.16)}px`; stick.style.top = `${innerHeight - 100}px`; knob.style.transform = ''; };
+  home();
+  addEventListener('resize', () => { if (sid === null) home(); });
+  pad.addEventListener('pointerdown', (e) => {
+    if (sid !== null || e.target.closest('button') || e.clientX > innerWidth * 0.55) return;
+    sid = e.pointerId; ox = e.clientX; oy = e.clientY;
+    stick.style.left = `${ox}px`; stick.style.top = `${oy}px`; stick.classList.add('on');
+    pad.setPointerCapture?.(e.pointerId);
+  });
+  pad.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== sid) return;
+    let dx = e.clientX - ox, dy = e.clientY - oy;
+    const d = Math.hypot(dx, dy);
+    if (d > R) { dx *= R / d; dy *= R / d; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const k = d < 8 ? 0 : 1 / R;
+    touch.mx = dx * k; touch.mz = -dy * k;
+  });
+  const release = (e) => {
+    if (e.pointerId !== sid) return;
+    sid = null; touch.mx = touch.mz = 0; stick.classList.remove('on'); home();
+  };
+  pad.addEventListener('pointerup', release);
+  pad.addEventListener('pointercancel', release);
+  for (const b of document.querySelectorAll('#tbtns button')) {
+    const name = b.dataset.b;
+    const up = () => { b.classList.remove('on'); if (name === 'block') touch.block = false; };
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      initAudio();
+      b.classList.add('on');
+      if (name === 'block') touch.block = true; else touch.tap[name] = true;
+      navigator.vibrate?.(8);
+    });
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+    b.addEventListener('pointerleave', up);
+  }
+  pad.addEventListener('contextmenu', (e) => e.preventDefault());
+  $('#tPause').addEventListener('click', () => {
+    $('#pauseTitle').textContent = A.mode === 'local' ? 'Paused' : 'Menu';
+    if (A.mode === 'local') setPaused(true); else $('#pause').hidden = false;
+  });
+  $('#tAgain').addEventListener('click', () => rematch());
+  $('#tMenu').addEventListener('click', quitToMenu);
+}
+
 const camFwd = V(0, 0, -1), camRight = V(1, 0, 0);
 // Returns an NBSim input: world-space move plus buttons. Movement is relative to the camera.
 function readHuman(h) {
@@ -1130,6 +1193,12 @@ function readHuman(h) {
     sx = clamp(sx + pad.mx, -1, 1);
     sz = clamp(sz + pad.mz, -1, 1);
     for (const k of ['jump', 'punch', 'kick', 'block', 'super']) it[k] = it[k] || pad[k];
+  }
+  if (PHONE && h === A.humans[0]) {
+    sx = clamp(sx + touch.mx, -1, 1);
+    sz = clamp(sz + touch.mz, -1, 1);
+    for (const k of ['jump', 'punch', 'kick', 'super']) it[k] = it[k] || !!touch.tap[k];
+    it.block = it.block || touch.block;
   }
   const move = V().addScaledVector(camRight, sx).addScaledVector(camFwd, sz);
   if (move.lengthSq() > 1) move.normalize();
@@ -1153,6 +1222,7 @@ function beginMatch(mode, S) {
   $('#lobby').hidden = true;
   $('#pause').hidden = true;
   $('#hud').hidden = false;
+  $('#touch').hidden = !PHONE;
   clearAnnounce();
   buildHud(S);
   setNetTag();
@@ -1220,6 +1290,11 @@ document.querySelectorAll('.seg').forEach((seg) => seg.addEventListener('click',
   const v = b.dataset.v;
   A.opts[seg.dataset.key] = isNaN(+v) ? v : +v;
   updateLocalNote();
+if (PHONE) {
+  $('#localTitle').textContent = 'Play on this phone';
+  A.opts.humans = 1;
+  updateLocalNote();
+}
   if (seg.dataset.key === 'onlineFighters') renderLobby(lastLobby);
 }));
 updateLocalNote();
@@ -1233,12 +1308,14 @@ function toMenu() {
   $('#lobby').hidden = true;
   $('#pause').hidden = true;
   $('#hud').hidden = true;
+  $('#touch').hidden = true;
   $('#netTag').hidden = true;
   clearAnnounce();
 }
 function quitToMenu() { NBNet.close(); toMenu(); setStatus(''); }
 function setPaused(p) {
   A.paused = p;
+  if (p) $('#pauseTitle').textContent = 'Paused';
   $('#pause').hidden = !p;
   if (p) $('#btnResume').focus();
 }
@@ -1257,15 +1334,15 @@ function renderLobby(info) {
   $('#lobbyRole').textContent = host ? 'Hosting' : 'Joined';
   $('#lobbyCode').textContent = info?.code || '·····'; // only once the room is actually open
   $('#lobbyHelp').textContent = host
-    ? 'Share the code. Up to 3 friends can join from a computer or an Apple Watch.'
+    ? 'Share the code. Up to 3 friends can join from a computer, phone or Apple Watch.'
     : 'Waiting for the host to start the match.';
-  const players = info?.players || (host ? ['desktop'] : []);
+  const players = info?.players || (host ? [CLIENT] : []);
   const you = host ? 0 : info?.you ?? -1;
   const list = $('#lobbyList');
   list.innerHTML = '';
   players.forEach((client, i) => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="c" style="color:${hexStr(ROSTER[i].color)}">${ROSTER[i].name}</span><span class="dev">${client === 'watch' ? 'Apple Watch' : 'computer'}${i === you ? ' · you' : ''}${i === 0 ? ' · host' : ''}</span>`;
+    li.innerHTML = `<span class="c" style="color:${hexStr(ROSTER[i].color)}">${ROSTER[i].name}</span><span class="dev">${client === 'watch' ? 'Apple Watch' : client === 'phone' ? 'phone' : 'computer'}${i === you ? ' · you' : ''}${i === 0 ? ' · host' : ''}</span>`;
     list.appendChild(li);
   });
   const n = Math.min(4, Math.max(A.opts.onlineFighters, players.length));
@@ -1317,8 +1394,8 @@ function onMetaKey(code) {
 }
 
 $('#btnPlay').addEventListener('click', startLocal);
-$('#btnHost').addEventListener('click', () => { initAudio(); showLobby('host'); NBNet.host('desktop'); });
-$('#joinForm').addEventListener('submit', (e) => { e.preventDefault(); initAudio(); NBNet.join($('#joinCode').value, 'desktop'); });
+$('#btnHost').addEventListener('click', () => { initAudio(); showLobby('host'); NBNet.host(CLIENT); });
+$('#joinForm').addEventListener('submit', (e) => { e.preventDefault(); initAudio(); NBNet.join($('#joinCode').value, CLIENT); });
 $('#btnStartOnline').addEventListener('click', hostStart);
 $('#btnLeaveLobby').addEventListener('click', quitToMenu);
 $('#btnResume').addEventListener('click', () => setPaused(false));
@@ -1377,9 +1454,16 @@ function updateHud(S, dt) {
   timerEl.classList.toggle('low', t <= 10 && S.phase === 'fight');
   if (S.phase === 'over' && !A.overShown) {
     A.overShown = true;
-    subEl.textContent = A.mode === 'guest' ? 'ENTER: ASK FOR REMATCH · ESC: LEAVE' : 'ENTER: REMATCH · ESC: MENU';
+    subEl.textContent = PHONE ? '' : A.mode === 'guest' ? 'ENTER: ASK FOR REMATCH · ESC: LEAVE' : 'ENTER: REMATCH · ESC: MENU';
+    $('#tAgain').textContent = A.mode === 'guest' ? 'Ask for rematch' : 'Rematch';
   } else if (S.phase !== 'over' && A.overShown) {
     A.overShown = false;
+  }
+  if (PHONE) {
+    $('#touch').classList.toggle('over', S.phase === 'over');
+    $('#tOver').hidden = S.phase !== 'over';
+    const me = S.fighters[A.you[0]];
+    $('#tSuper').classList.toggle('ready', !!me && me.meter >= 100);
   }
 }
 
@@ -1465,6 +1549,7 @@ function frame(now) {
     }
   }
   pressed.clear();
+  if (!A.paused) touch.tap = {};
 
   const shown = A.mode === 'menu' ? A.menuS : S;
   views.forEach((v, i) => {

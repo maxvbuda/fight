@@ -258,7 +258,7 @@
     var n = Math.min(4, Math.max(A.opts.fighters, players.length));
     var html = '';
     for (var i = 0; i < (host ? n : players.length); i++) {
-      var who = i < players.length ? (players[i] === 'watch' ? 'watch' : 'computer') + (i === you ? ' · you' : '') : 'CPU';
+      var who = i < players.length ? (players[i] === 'watch' ? 'watch' : players[i] === 'phone' ? 'phone' : 'computer') + (i === you ? ' · you' : '') : 'CPU';
       html += '<li><span style="color:' + rgb(LOOKS[i].suit, 1) + '">' + Sim.ROSTER[i].name + '</span> <small>' + who + '</small></li>';
     }
     $('lbList').innerHTML = html;

@@ -160,7 +160,7 @@
     if (m.t === '_join') {
       if (g) { toGuest(g.id, { t: '_ok' }); broadcastLobby(); return; }
       if (N.started || N.guests.length >= MAX_GUESTS) { toGuest(d.f, { t: 'full', started: N.started }); return; }
-      N.guests.push({ id: d.f, client: m.client === 'watch' ? 'watch' : 'desktop', fidx: -1, input: { mx: 0, mz: 0, block: false, c: [0, 0, 0, 0] }, seen: [0, 0, 0, 0], last: now() });
+      N.guests.push({ id: d.f, client: m.client === 'watch' || m.client === 'phone' ? m.client : 'desktop', fidx: -1, input: { mx: 0, mz: 0, block: false, c: [0, 0, 0, 0] }, seen: [0, 0, 0, 0], last: now() });
       toGuest(d.f, { t: '_ok' });
       broadcastLobby();
       return;

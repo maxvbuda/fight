@@ -88,7 +88,7 @@ canvas { display: block; }
 #lobbyList .dev { color: var(--muted); font-size: 13px; margin-left: 6px; }
 #lobbyList .empty { color: var(--muted); font-style: italic; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-.overlay { position: fixed; inset: 0; display: flex; padding: 16px; overflow-y: auto;
+.overlay { position: fixed; inset: 0; z-index: 5; display: flex; padding: 16px; overflow-y: auto;
   background: radial-gradient(ellipse at 50% 120%, rgba(255, 45, 111, 0.25), transparent 60%), rgba(4, 3, 10, 0.45); }
 .menu-card { margin: auto; width: min(760px, 100%); background: var(--panel); border: 1px solid var(--line); padding: 32px clamp(18px, 4vw, 40px); display: grid; gap: 22px; backdrop-filter: blur(6px); }
 .menu-card.small { width: min(340px, 100%); text-align: center; }
@@ -126,4 +126,49 @@ kbd { font: 600 12px var(--body); display: inline-block; min-width: 22px; text-a
   #timer { font-size: 28px; }
   #bars { gap: 8px 12px; }
   .meter span { display: none; }
+}
+
+/* ---------- Phone edition: touch controls ---------- */
+.phone-help { display: none; }
+html.phone .phone-help { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px; }
+html.phone .phone-help h3 { margin: 0; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+html.phone .phone-help p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+html.phone .phone-help b { color: var(--fg); }
+html.phone .controls, html.phone .hint, html.phone #humansRow { display: none; }
+.rotate { display: none; }
+@media (orientation: portrait) { html.phone .rotate { display: block; color: var(--gold) !important; } }
+html.phone, html.phone body { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+html.phone .menu-card { padding: 22px 18px; gap: 18px; }
+html.phone .overlay { padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+html.phone #hud { padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); }
+html.phone #netTag { display: none; }
+
+#touch { position: fixed; inset: 0; z-index: 3; touch-action: none; -webkit-user-select: none; user-select: none; }
+#stick { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.05); pointer-events: none; opacity: 0.55; transition: opacity 0.15s; }
+#stick.on { opacity: 1; }
+#knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3); border: 2px solid rgba(255, 255, 255, 0.6); }
+#tbtns { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
+  display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 64px); gap: 10px; }
+#tbtns button { width: 64px; height: 64px; padding: 0; border-radius: 50%; font-size: 12px; letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.35); touch-action: none; }
+#tbtns button.atk { font: 400 24px var(--display); color: var(--gold); border-color: rgba(255, 209, 102, 0.7); }
+#tbtns button.on { background: rgba(255, 255, 255, 0.35); transform: scale(0.93); }
+#tbtns [data-b="punch"] { grid-column: 3; grid-row: 2; }
+#tbtns [data-b="kick"] { grid-column: 2; grid-row: 2; }
+#tbtns [data-b="jump"] { grid-column: 3; grid-row: 1; }
+#tbtns [data-b="block"] { grid-column: 1; grid-row: 2; }
+#tbtns [data-b="super"] { grid-column: 2; grid-row: 1; opacity: 0.45; }
+#tbtns [data-b="super"].ready { opacity: 1; background: var(--gold); color: #1a1000; border-color: var(--gold); box-shadow: 0 0 18px rgba(255, 209, 102, 0.8); }
+#tPause { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 150px);
+  width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 13px; }
+#tOver { position: absolute; left: 0; right: 0; bottom: max(24px, env(safe-area-inset-bottom)); display: flex; gap: 12px; justify-content: center; }
+#tOver button { min-width: 130px; }
+#touch.over #tbtns, #touch.over #stick { display: none; }
+@media (max-height: 420px) {
+  #tbtns { grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 58px); gap: 8px; }
+  #tbtns button { width: 58px; height: 58px; }
+  #tPause { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 132px); }
+  html.phone #announce { font-size: 56px; }
 }
