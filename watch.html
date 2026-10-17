@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="disabled-adaptations" content="watch">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<script>
+  // The watch restores the old zoom and scroll position when it reopens or reloads an address it
+  // has seen before, which leaves the game shifted under the status bar. A brand-new address
+  // always loads clean, so every visit hops to one stamped with the current time.
+  (function () {
+    var m = location.search.match(/[?&]t=(\d+)/), now = Date.now();
+    var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+    var fresh = !nav || nav.type === 'navigate';
+    if (m && fresh && Math.abs(now - +m[1]) < 10000) return;
+    var q = location.search.replace(/^\?/, '').split('&').filter(function (p) { return p && !/^t=/.test(p); });
+    q.push('t=' + now);
+    location.replace(location.pathname + '?' + q.join('&') + location.hash);
+  })();
+</script>
 <title>Neon Brawl Mini</title>
 <style>
   /* Watch edition: one dark screen, controls along the bottom edge. No web fonts (watchOS ignores them). */
