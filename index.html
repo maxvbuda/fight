@@ -12,7 +12,7 @@
     if (/[?&]full\b/.test(location.search)) return;
     var small = Math.min(screen.width, screen.height) < 300, gl = false;
     try { var c = document.createElement('canvas'); gl = !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl'))); } catch (e) {}
-    if (small || !gl) location.replace('watch.html');
+    if (small || !gl) location.replace('watch');
   })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
