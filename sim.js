@@ -249,10 +249,11 @@
           if (o === f || o.state === 'ko' || a.hits.indexOf(o.idx) >= 0) return;
           var ox = o.x - f.x, oz = o.z - f.z, od = Math.sqrt(ox * ox + oz * oz);
           var inFront = od < 0.3 || (ox * f.dirX + oz * f.dirZ) / od > 0.35;
-          // Jump attacks reach down onto grounded fighters; a kick from the ground passes under
+          // A jump kick reaches down onto grounded fighters, but a jump punch goes over their head
+          // (it only hits someone up in the air with you). A kick from the ground passes under
           // someone in the air (they're above your foot).
           var dy = f.y - o.y;
-          var reach = a.air ? dy > -0.6 && dy < 1.7 : Math.abs(dy) < 1.1;
+          var reach = !a.air ? Math.abs(dy) < 1.1 : a.name === 'kick' || a.name === 'super' ? dy > -0.6 && dy < 1.7 : Math.abs(dy) < 0.45;
           if (!a.air && a.name === 'kick' && o.y > 0.4) reach = false;
           if (od < m.range && reach && inFront) {
             a.hits.push(o.idx); a.hit = true;
