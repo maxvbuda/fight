@@ -202,10 +202,10 @@
   var DIFFS = ['easy', 'normal', 'hard', 'extreme', 'adaptive'];
   // Adaptive CPU: the level it builds for you is kept on this watch between matches.
   function loadAdapt() { try { return JSON.parse(localStorage.getItem('nbAdapt-watch')) || null; } catch (e) { return null; } }
-  function saveAdapt(ad) { try { localStorage.setItem('nbAdapt-watch', JSON.stringify({ level: Math.round(ad.level * 10) / 10, habits: ad.habits })); } catch (e) {} }
+  function saveAdapt(ad) { try { localStorage.setItem('nbAdapt-watch', JSON.stringify({ power: Math.round(ad.power * 10) / 10, rounds: ad.rounds, habits: ad.habits })); } catch (e) {} }
+  function powerOf(ad) { return Math.round(ad ? (ad.power != null ? ad.power : ad.level != null ? ad.level : 40) : 40); }
   function diffText() {
-    var ad = A.opts.diff === 'adaptive' && loadAdapt();
-    return 'CPU: ' + DIFF_LABEL[A.opts.diff] + (A.opts.diff === 'adaptive' ? ' ' + Math.round(ad ? ad.level : 40) : '');
+    return 'CPU: ' + DIFF_LABEL[A.opts.diff] + (A.opts.diff === 'adaptive' ? ' · you ' + powerOf(loadAdapt()) : '');
   }
   function show(id) {
     ['menu', 'lobby'].forEach(function (x) { $(x).hidden = x !== id; });
@@ -982,6 +982,8 @@
       overEl.hidden = !showOver;
       syncScroll();
       $('bAgain').textContent = A.mode === 'guest' ? 'Ask for rematch' : 'Rematch';
+      var ad = S.adapt;
+      $('overPower').textContent = ad ? 'Your power ' + Math.round(ad.startPower) + ' → ' + Math.round(ad.power) : '';
     }
   }
   syncScroll();

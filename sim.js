@@ -88,7 +88,7 @@
   }
 
   // opts: { slots: [{kind: 'local'|'remote'|'cpu', label}], diff, profile: 'desktop'|'watch', roundTime,
-  //         adapt: saved adaptive profile { level, habits } when diff is 'adaptive' }
+  //         adapt: saved adaptive profile { power, rounds, habits } when diff is 'adaptive' }
   function createMatch(opts) {
     var S = {
       opts: opts, fighters: opts.slots.map(function (s, i) { return makeFighter(i, s); }),
@@ -97,8 +97,13 @@
     };
     if (opts.diff === 'adaptive') {
       var saved = opts.adapt || {}, h = saved.habits || {};
+      var power = +saved.power >= 0 ? +saved.power : +saved.level >= 0 ? +saved.level : 40;
+      power = clamp(power, 0, 100);
       S.adapt = {
-        level: clamp(+saved.level >= 0 ? +saved.level : 40, 0, 100),
+        power: power, // how strong you are: saved, and where the CPU starts each match
+        startPower: power, rounds: +saved.rounds || 0,
+        level: power, // the CPU's live level, which follows how you're fighting right now
+        lvlSum: 0, lvlT: 0,
         habits: { jump: +h.jump || 0, atk: +h.atk || 0, block: +h.block || 0 },
         save: false
       };
@@ -121,6 +126,7 @@
     if (present(S).length < 2) return;
     S.round = 1;
     S.fighters.forEach(function (f) { f.wins = 0; f.meter = 0; });
+    if (S.adapt) { S.adapt.level = S.adapt.power; S.adapt.startPower = S.adapt.power; }
     startRound(S);
   }
 
@@ -131,9 +137,11 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Adaptive CPU: a level from 0 (easy) to 100 (extreme) that rises when you beat it up and
-  // falls when it beats you, plus counters for your habits (jumping, attacking, blocking).
-  // The front ends save S.adapt between matches, so it remembers the level it built for you.
+  // Adaptive CPU. Your power (0-100) is saved between matches, and each match the CPU starts at
+  // it. During a fight its live level rises when you beat it up and falls when it beats you,
+  // and it counters your habits (jumping, attacking, blocking). After each round your power
+  // moves toward how you actually played: the CPU's average level that round, plus a bit if you
+  // won it or minus a bit if you lost. New players' power moves fast; it settles over time.
   // ---------------------------------------------------------------------------
   function adaptiveDiff(table, ad) {
     var x = clamp(ad.level, 0, 100) / 100 * (LADDER.length - 1), i = Math.min(LADDER.length - 2, Math.floor(x)), t = x - i;
@@ -146,6 +154,19 @@
     out.bait = Math.min(1, out.bait + clamp(h.block / 0.3, 0, 1) * 0.5);
     return out;
   }
+  function adaptRound(S, winner) {
+    var ad = S.adapt, w = S.fighters[winner];
+    var vsCpu = S.fighters.some(function (f) { return f.kind === 'cpu'; }) && S.fighters.some(isHuman);
+    if (!vsCpu) return;
+    var avg = ad.lvlT > 1 ? ad.lvlSum / ad.lvlT : ad.level;
+    var perf = avg + (!w ? 0 : w.kind === 'cpu' ? -8 : 8);
+    var rate = Math.max(0.2, 1 / (ad.rounds + 2));
+    ad.power = clamp(ad.power + (perf - ad.power) * rate, 0, 100);
+    ad.rounds++;
+    ad.lvlSum = 0; ad.lvlT = 0;
+    if (w) adaptLevel(S, w.kind === 'cpu' ? -6 : 6);
+    ad.save = true;
+  }
   function isHuman(f) { return f.kind === 'local' || f.kind === 'remote'; }
   function adaptLevel(S, by) {
     if (!S.adapt) return;
@@ -155,6 +176,7 @@
   }
   // Habits fade over ~20 seconds of fighting: jumps and attacks are counts, block is a share of the time.
   function adaptHabits(S, dt) {
+    S.adapt.lvlSum += S.adapt.level * dt; S.adapt.lvlT += dt;
     var h = S.adapt.habits, fade = Math.exp(-dt / 20), blocking = 0, humans = 0;
     h.jump *= fade; h.atk *= fade;
     S.fighters.forEach(function (f) {
@@ -361,10 +383,7 @@
   function endRound(S, winner) {
     S.winner = winner;
     if (winner >= 0) S.fighters[winner].wins++;
-    if (S.adapt && winner >= 0) {
-      adaptLevel(S, S.fighters[winner].kind === 'cpu' ? -6 : 6);
-      S.adapt.save = true;
-    }
+    if (S.adapt) adaptRound(S, winner);
     S.phase = 'ko'; S.phaseT = 0; S.flags = {};
   }
 

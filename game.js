@@ -1277,7 +1277,8 @@ function setStatus(t) { statusEl.textContent = t; $('#lobbyNote').textContent = 
 
 // Adaptive CPU: the level it builds for you is kept in this browser between matches.
 function loadAdapt() { try { return JSON.parse(localStorage.getItem('nbAdapt-desktop')) || null; } catch (e) { return null; } }
-function saveAdapt(ad) { try { localStorage.setItem('nbAdapt-desktop', JSON.stringify({ level: Math.round(ad.level * 10) / 10, habits: ad.habits })); } catch (e) {} }
+function saveAdapt(ad) { try { localStorage.setItem('nbAdapt-desktop', JSON.stringify({ power: Math.round(ad.power * 10) / 10, rounds: ad.rounds, habits: ad.habits })); } catch (e) {} }
+const powerOf = (ad) => Math.round(ad ? (ad.power ?? ad.level ?? 40) : 40);
 
 function updateLocalNote() {
   const { fighters, humans } = A.opts;
@@ -1288,7 +1289,9 @@ function updateLocalNote() {
   if (A.opts.diff === 'extreme') parts.push('Extreme: blocks almost everything, punishes mistakes, kicks you out of jumps.');
   if (A.opts.diff === 'adaptive') {
     const ad = loadAdapt();
-    parts.push(`Adaptive CPU, level ${Math.round(ad ? ad.level : 40)} of 100. It fights as hard as you do, learns your habits and saves the level it builds for you.`);
+    parts.push(ad?.rounds
+      ? `Your power: ${powerOf(ad)} of 100, from ${ad.rounds} round${ad.rounds > 1 ? 's' : ''}. The adaptive CPU starts there, follows how hard you fight, and updates your power after every round.`
+      : 'Adaptive CPU: your first fight sets your power (0 to 100). After that it starts every match at your power and updates it after every round.');
   }
   $('#localNote').textContent = parts.join(' ');
 }
@@ -1463,7 +1466,10 @@ function updateHud(S, dt) {
   timerEl.classList.toggle('low', t <= 10 && S.phase === 'fight');
   if (S.phase === 'over' && !A.overShown) {
     A.overShown = true;
-    subEl.textContent = PHONE ? '' : A.mode === 'guest' ? 'ENTER: ASK FOR REMATCH · ESC: LEAVE' : 'ENTER: REMATCH · ESC: MENU';
+    const keysHint = PHONE ? '' : A.mode === 'guest' ? 'ENTER: ASK FOR REMATCH · ESC: LEAVE' : 'ENTER: REMATCH · ESC: MENU';
+    const ad = S.adapt, d = ad ? Math.round(ad.power) - Math.round(ad.startPower) : 0;
+    const powerLine = ad ? `YOUR POWER ${Math.round(ad.startPower)} → ${Math.round(ad.power)}${d > 0 ? ' ▲' : d < 0 ? ' ▼' : ''}` : '';
+    subEl.textContent = [powerLine, keysHint].filter(Boolean).join(' · ');
     $('#tAgain').textContent = A.mode === 'guest' ? 'Ask for rematch' : 'Rematch';
   } else if (S.phase !== 'over' && A.overShown) {
     A.overShown = false;
