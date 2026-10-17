@@ -42,7 +42,7 @@ On the watch, the CPU is gentler and rounds last 60 seconds. Online play works o
 - `relay/`: the relay. Deploy with `cd relay && npx wrangler deploy`, then put its URL in `RELAY` at the top of `net.js`. For local testing, run `npx wrangler dev` and open the game with `?relay=http://localhost:8787`.
 - `game.js`: the full version (three.js rendering, keyboard and gamepad input).
 - `watch.js`: the watch version (canvas rendering, touch controls).
-- Phones get the full 3D game (`index.html` + `game.js`) with on-screen controls: a floating stick on the left half, punch/kick/jump/block/super buttons on the right. Open `phone.html` (or add `?phone`) to force it.
+- Phones get the full 3D game (`index.html` + `game.js`) with on-screen controls: a floating stick on the left half, punch/kick/jump/block/super buttons on the right. Open `phone.html` (or add `?phone`) to force it. `phone.html` is an exact copy of `index.html`: keep the two identical.
 
 ## Run locally
 

@@ -21,8 +21,8 @@ function lerpAngle(a, b, t) {
 const glow = (hex, k) => new THREE.Color(hex).multiplyScalar(k);
 const TAU = Math.PI * 2;
 
-// Phones (touch screen, no mouse) get on-screen controls and a lighter renderer. ?phone forces it.
-const PHONE = /[?&]phone\b/.test(location.search) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
+// Phones (touch screen, no mouse) get on-screen controls and a lighter renderer. phone.html or ?phone forces it.
+const PHONE = /[?&]phone\b/.test(location.search) || /phone\.html$/.test(location.pathname) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
 document.documentElement.classList.toggle('phone', PHONE);
 const CLIENT = PHONE ? 'phone' : 'desktop';
 

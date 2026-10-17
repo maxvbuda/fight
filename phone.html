@@ -2,14 +2,143 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Neon Brawl</title>
 <script>
-  // Short link for phones: the phone edition is the main game with touch controls switched on.
-  location.replace('./?phone' + location.search.replace(/^\?/, '&') + location.hash);
+  // Tiny screens (Apple Watch) and browsers without WebGL get the lightweight watch edition.
+  (function () {
+    if (/[?&]full\b/.test(location.search)) return;
+    var small = Math.min(screen.width, screen.height) < 300, gl = false;
+    try { var c = document.createElement('canvas'); gl = !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl'))); } catch (e) {}
+    if (small || !gl) location.replace('watch.html');
+  })();
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
-<body style="background:#07060f;color:#f1ecff;font-family:system-ui,sans-serif">
-<p><a href="./?phone" style="color:#2de2ff">Open Neon Brawl</a></p>
+<body>
+
+<div id="hud" hidden>
+  <div id="timer">99</div>
+  <div id="bars"></div>
+  <div id="netTag" hidden></div>
+</div>
+
+<div id="announce"></div>
+<div id="subtext"></div>
+
+<div id="menu" class="overlay">
+  <div class="menu-card">
+    <h1 class="logo">NEON<span>BRAWL</span></h1>
+    <p class="tag">Up to four fighters. One ring. First to two rounds.</p>
+
+    <section class="panel">
+      <h3 id="localTitle">Play on this computer</h3>
+      <div class="row"><span class="lbl">Fighters</span>
+        <div class="seg" data-key="fighters"><button data-v="2" class="on">2</button><button data-v="3">3</button><button data-v="4">4</button></div></div>
+      <div class="row" id="humansRow"><span class="lbl">Players here</span>
+        <div class="seg" data-key="humans"><button data-v="1" class="on">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button></div></div>
+      <div class="row"><span class="lbl">CPU</span>
+        <div class="seg" data-key="diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
+      <p class="note" id="localNote"></p>
+      <button id="btnPlay" class="primary">Start fight</button>
+    </section>
+
+    <section class="panel">
+      <h3>Play online</h3>
+      <div class="row">
+        <button id="btnHost">Host a room</button>
+        <form id="joinForm" class="join">
+          <input id="joinCode" maxlength="5" placeholder="Room code" autocomplete="off" spellcheck="false" aria-label="Room code">
+          <button type="submit">Join</button>
+        </form>
+      </div>
+      <p id="netStatus" aria-live="polite"></p>
+    </section>
+
+    <div class="phone-help">
+      <h3>Touch controls</h3>
+      <p>Drag anywhere on the left half to move. Right side: <b>P</b> punch, <b>K</b> kick, <b>JUMP</b>, hold <b>BLOCK</b>, and <b>SUPER</b> when your meter is full. Land a hit, then tap punch or kick again to chain a combo.</p>
+      <p class="rotate">Turn your phone sideways for a bigger view.</p>
+    </div>
+
+    <div class="controls">
+      <div>
+        <h3>Player 1 (and online)</h3>
+        <dl>
+          <dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd>
+          <dt>Jump</dt><dd><kbd>Space</kbd></dd>
+          <dt>Punch</dt><dd><kbd>J</kbd> or <kbd>F</kbd></dd>
+          <dt>Kick</dt><dd><kbd>K</kbd> or <kbd>G</kbd></dd>
+          <dt>Block</dt><dd><kbd>L</kbd> or <kbd>H</kbd> (hold)</dd>
+          <dt>Super</dt><dd><kbd>U</kbd> or <kbd>R</kbd> (full meter)</dd>
+        </dl>
+      </div>
+      <div>
+        <h3>Player 2</h3>
+        <dl>
+          <dt>Move</dt><dd><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></dd>
+          <dt>Jump</dt><dd><kbd>Right Shift</kbd> / <kbd>Num 0</kbd></dd>
+          <dt>Punch</dt><dd><kbd>,</kbd> / <kbd>Num 1</kbd></dd>
+          <dt>Kick</dt><dd><kbd>.</kbd> / <kbd>Num 2</kbd></dd>
+          <dt>Block</dt><dd><kbd>/</kbd> / <kbd>Num 3</kbd></dd>
+          <dt>Super</dt><dd><kbd>;</kbd> / <kbd>Num 4</kbd></dd>
+        </dl>
+      </div>
+    </div>
+    <p class="hint">Players 3 and 4 use gamepads (gamepad 1 also works for player 1, gamepad 2 for player 2): stick to move, A jump, X punch, Y kick, RB block, B super. Your fighter faces the nearest opponent. Land a hit, then press punch or kick again to chain a combo. <kbd>Esc</kbd> pauses.</p>
+  </div>
+</div>
+
+<div id="lobby" class="overlay" hidden>
+  <div class="menu-card lobby-card">
+    <p class="eyebrow" id="lobbyRole">Hosting</p>
+    <h2>Room <span id="lobbyCode">·····</span></h2>
+    <p class="note" id="lobbyHelp"></p>
+    <ol id="lobbyList"></ol>
+    <div class="row" id="lobbyFighters"><span class="lbl">Fighters</span>
+      <div class="seg" data-key="onlineFighters"><button data-v="2" class="on">2</button><button data-v="3">3</button><button data-v="4">4</button></div></div>
+    <p class="note" id="lobbyNote"></p>
+    <div class="row">
+      <button id="btnStartOnline" class="primary">Start match</button>
+      <button id="btnLeaveLobby">Leave</button>
+    </div>
+  </div>
+</div>
+
+<div id="touch" hidden>
+  <div id="stick"><div id="knob"></div></div>
+  <div id="tbtns">
+    <button data-b="super" id="tSuper">Super</button>
+    <button data-b="block">Block</button>
+    <button data-b="jump">Jump</button>
+    <button data-b="kick" class="atk">K</button>
+    <button data-b="punch" class="atk">P</button>
+  </div>
+  <button id="tPause" aria-label="Pause">II</button>
+  <div id="tOver" hidden>
+    <button id="tAgain" class="primary">Rematch</button>
+    <button id="tMenu">Menu</button>
+  </div>
+</div>
+
+<div id="pause" class="overlay" hidden>
+  <div class="menu-card small">
+    <h2 id="pauseTitle">Paused</h2>
+    <button id="btnResume" class="primary">Resume</button>
+    <button id="btnQuit">Quit to menu</button>
+  </div>
+</div>
+
+<script src="sim.js"></script>
+<script src="net.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module" src="game.js"></script>
 </body>
 </html>
