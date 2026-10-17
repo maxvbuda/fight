@@ -206,7 +206,8 @@
     return n;
   }
   function startAttack(S, f, name) {
-    f.atk = { name: name, t: 0, hit: false, hits: [], waved: false };
+    // air: started mid-jump, which makes it a jump attack (more damage, see resolveHit).
+    f.atk = { name: name, t: 0, hit: false, hits: [], waved: false, air: f.y > 0.05 };
     f.state = 'attack';
     if (name === 'super') { f.meter = 0; emit(S, 'sfx', 'charge'); }
     else emit(S, 'sfx', 'whoosh');
@@ -248,7 +249,12 @@
           if (o === f || o.state === 'ko' || a.hits.indexOf(o.idx) >= 0) return;
           var ox = o.x - f.x, oz = o.z - f.z, od = Math.sqrt(ox * ox + oz * oz);
           var inFront = od < 0.3 || (ox * f.dirX + oz * f.dirZ) / od > 0.35;
-          if (od < m.range && Math.abs(f.y - o.y) < 1.1 && inFront) {
+          // Jump attacks reach down onto grounded fighters; a kick from the ground passes under
+          // someone in the air (they're above your foot).
+          var dy = f.y - o.y;
+          var reach = a.air ? dy > -0.6 && dy < 1.7 : Math.abs(dy) < 1.1;
+          if (!a.air && a.name === 'kick' && o.y > 0.4) reach = false;
+          if (od < m.range && reach && inFront) {
             a.hits.push(o.idx); a.hit = true;
             resolveHit(S, f, o, m);
           }
@@ -300,10 +306,20 @@
     animate(f, dt);
   }
 
+  // Tricks: bonus damage for a jump kick or jump punch, and for a counter (hitting someone while
+  // their own attack is still winding up). They stack, up to 2.2 times the damage.
+  function trickOf(att, def, m) {
+    var name = '', mult = 1, a = att.atk, d = def.atk;
+    if (a && a.air && m !== MOVES.super) { name = m === MOVES.kick ? 'JUMP KICK' : 'JUMP PUNCH'; mult = m === MOVES.kick ? 1.7 : 1.35; }
+    if (d && d.name !== 'super' && d.t < MOVES[d.name].start) { name = name ? name + ' + COUNTER' : 'COUNTER'; mult *= 1.4; }
+    return { name: name, mult: Math.min(mult, 2.2) };
+  }
+
   function resolveHit(S, att, def, m) {
     var blocked = def.state === 'block';
+    var trick = trickOf(att, def, m);
     if (S.adapt && isHuman(att)) S.adapt.habits.atk++;
-    var dmg = m.dmg * (att.kind === 'cpu' ? diffOf(S).dmg : 1);
+    var dmg = m.dmg * trick.mult * (att.kind === 'cpu' ? diffOf(S).dmg : 1);
     if (blocked) dmg *= m === MOVES.super ? 0.35 : 0.1;
     else {
       att.combo = def.stun > 0 ? att.combo + 1 : 1;
@@ -317,7 +333,7 @@
     def.meter = Math.min(100, def.meter + dmg * 0.5);
     var kx = def.x - att.x, kz = def.z - att.z, kl = Math.sqrt(kx * kx + kz * kz);
     if (kl < 1e-4) { kx = att.dirX; kz = att.dirZ; kl = 1; }
-    var push = m.push * (blocked ? 0.55 : 1);
+    var push = m.push * (blocked ? 0.55 : 1) * (1 + (trick.mult - 1) * 0.6);
     def.vx = kx / kl * push; def.vz = kz / kl * push;
 
     var hx = r3(att.x + (def.x - att.x) * 0.7), hz = r3(att.z + (def.z - att.z) * 0.7);
@@ -331,9 +347,11 @@
       // A super in progress can't be interrupted: the defender takes the damage but keeps attacking.
       if (!(def.atk && def.atk.name === 'super')) { def.stun = m.stun; def.atk = null; def.state = 'hit'; }
       if (m.launch || def.hp <= 0) def.vy = 6.2;
-      var big = m === MOVES.super;
+      else if (trick.name.indexOf('JUMP KICK') === 0) def.vy = 4.5;
+      if (trick.name) emit(S, 'trick', [trick.name, att.idx, Math.round(trick.mult * 100) / 100]);
+      var big = m === MOVES.super || trick.mult >= 1.6;
       emit(S, 'burst', [hx, hy, hz, att.color, big ? 50 : m === MOVES.kick ? 26 : 18, big ? 9 : 6]);
-      emit(S, 'sfx', m.sound);
+      emit(S, 'sfx', trick.mult >= 1.6 && m !== MOVES.super ? 'heavy' : m.sound);
       emit(S, 'shake', big ? 0.45 : m === MOVES.kick ? 0.18 : 0.1);
       S.hitstop = big ? 0.18 : m === MOVES.kick ? 0.08 : 0.055;
     }
@@ -483,12 +501,12 @@
         ai.seenAtk = ta;
         if (d < 2.0 && Math.random() < df.punish) { if (d < 1.5) inp.punch = true; else inp.kick = true; return inp; }
       }
-      // Anti-air: kick a target that jumps in close (one roll per jump).
+      // Anti-air: punch a target that jumps in close (one roll per jump). Kicks would pass under it.
       if (t.y > 0.35 && !ai.airRolled) {
         ai.airRolled = true;
         ai.antiAir = Math.random() < df.antiair;
       } else if (t.y <= 0) ai.airRolled = false;
-      if (ai.antiAir && t.y > 0.35 && t.y < 1.5 && d < 1.9) { ai.antiAir = false; inp.kick = true; return inp; }
+      if (ai.antiAir && t.y > 0.35 && t.y < 1.3 && d < 1.6) { ai.antiAir = false; inp.punch = true; return inp; }
       // Bait: back off from a blocking target, then rush in when the guard drops.
       if (t.state === 'block' && d < 2.2 && ai.act !== 'retreat' && Math.random() < df.bait * dt * 4) {
         if (me.meter >= 100) { inp.super = true; return inp; }

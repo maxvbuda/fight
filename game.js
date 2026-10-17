@@ -636,6 +636,7 @@ function runFx(type, a) {
       break;
     }
     case 'shake': shake = Math.max(shake, a); break;
+    case 'trick': showTrick(a[0], a[1], a[2]); break;
     case 'announce':
       announce(a[0], a[1], a[2]);
       if (a[1] === 'ko' || a[1] === 'stay') crowd.cheer(1);
@@ -753,6 +754,14 @@ function announce(text, mode = 'go', sub = '') {
   annEl.textContent = text;
   annEl.className = mode === 'ko' ? 'stay ko' : mode;
   subEl.textContent = sub;
+}
+const trickEl = $('#trick');
+function showTrick(name, idx, mult) {
+  trickEl.className = '';
+  void trickEl.offsetWidth; // restart animation
+  trickEl.innerHTML = `${name}<small>×${mult} DAMAGE</small>`;
+  trickEl.style.setProperty('--c', hexStr(ROSTER[idx]?.color ?? 0xffd166));
+  trickEl.className = 'show';
 }
 function clearAnnounce() { annEl.className = ''; annEl.textContent = ''; subEl.textContent = ''; }
 

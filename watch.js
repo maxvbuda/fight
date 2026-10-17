@@ -72,6 +72,7 @@
   A.menuS.events = [];
   var shake = 0;
   var ann = { text: '', sub: '', t: 0, stay: false };
+  var trick = null; // last jump kick / counter popup
   function announce(text, stay, sub) { ann.text = text; ann.sub = sub || ''; ann.t = 0; ann.stay = !!stay; }
 
   // ---------- Effects ----------
@@ -92,6 +93,7 @@
     if (type === 'burst') burst(a[0], a[1], a[2], hexRgb(a[3]), a[4], a[5]);
     else if (type === 'wave') waves.push({ x: a[0], y: a[1], z: a[2], t: 0, c: hexRgb(a[3]) });
     else if (type === 'shake') shake = Math.max(shake, a * 15);
+    else if (type === 'trick') trick = { text: a[0], mult: a[2], idx: a[1], t: 0 };
     else if (type === 'announce') {
       var text = a[0];
       if (/VICTORY/.test(text)) {
@@ -120,6 +122,7 @@
     for (var k = flashes.length - 1; k >= 0; k--) { flashes[k].t += dt; if (flashes[k].t > flashes[k].max) flashes.splice(k, 1); }
     shake *= Math.exp(-9 * dt);
     ann.t += dt;
+    if (trick) { trick.t += dt; if (trick.t > 1.1) trick = null; }
   }
 
   // ---------- Input: on-screen buttons, arena tap, keyboard ----------
@@ -859,6 +862,27 @@
       ctx.fillText(me.combo + ' HITS', W / 2, y0 + (two ? 42 : 52));
     }
   }
+  function drawTrick() {
+    if (!trick) return;
+    var t = trick.t, alpha = t < 0.1 ? t / 0.1 : clamp((1.1 - t) / 0.3, 0, 1), scale = t < 0.1 ? 1.6 - t / 0.1 * 0.6 : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(W / 2, (H - PAD_H) * 0.27 - Math.max(0, t - 0.8) * 30);
+    ctx.rotate(-0.06);
+    ctx.scale(scale, scale);
+    ctx.textAlign = 'center';
+    ctx.font = '900 ' + Math.min(W * 0.1, 22) + 'px -apple-system, system-ui, sans-serif';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    ctx.strokeText(trick.text, 0, 0);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(trick.text, 0, 0);
+    ctx.font = '700 10px -apple-system, system-ui, sans-serif';
+    ctx.strokeText('×' + trick.mult + ' damage', 0, 14);
+    ctx.fillStyle = '#f1ecff';
+    ctx.fillText('×' + trick.mult + ' damage', 0, 14);
+    ctx.restore();
+  }
   function drawAnnounce() {
     if (!ann.text) return;
     var t = ann.t, alpha, scale;
@@ -952,7 +976,7 @@
     drawFx(shown);
     var t3 = performance.now();
     ctx.restore();
-    if (A.mode !== 'menu') { drawHud(S); drawAnnounce(); }
+    if (A.mode !== 'menu') { drawHud(S); drawTrick(); drawAnnounce(); }
     var t4 = performance.now();
     prof.arena += t1 - t0; prof.fighters += t2 - t1; prof.fx += t3 - t2; prof.hud += t4 - t3; prof.n++;
     if (SHOW_FPS) {
