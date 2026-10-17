@@ -422,7 +422,7 @@
     if (alive.length <= 1) {
       endRound(S, alive.length ? alive[0].idx : att.idx);
       S.timeScale = 0.3;
-      emit(S, 'announce', ['LIGHTS\nOUT', 'ko']);
+      emit(S, 'announce', ['K.O.', 'ko']);
     } else {
       emit(S, 'announce', [def.name + ' IS DOWN', 'go']);
     }

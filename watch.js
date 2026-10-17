@@ -904,7 +904,7 @@
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'rgba(0,0,0,0.7)';
     ctx.strokeText(ann.text, 0, 0);
-    ctx.fillStyle = ann.text === 'LIGHTS OUT' ? '#ffd166' : '#f1ecff';
+    ctx.fillStyle = ann.text === 'K.O.' ? '#ffd166' : '#f1ecff';
     ctx.fillText(ann.text, 0, 0);
     if (ann.sub) {
       ctx.font = '700 11px -apple-system, system-ui, sans-serif';
