@@ -96,9 +96,9 @@
     else if (type === 'trick') trick = { text: a[0], label: String(a[2]).toLowerCase(), idx: a[1], t: 0 };
     else if (type === 'announce') {
       var text = a[0];
-      if (/VICTORY/.test(text)) {
+      if (/CHAMPION/.test(text)) {
         var winner = text.split('\n')[0], mine = A.S && A.S.fighters[A.me] && A.S.fighters[A.me].name;
-        text = winner === mine ? 'YOU WIN' : winner + ' WINS';
+        text = winner === mine ? 'CHAMPION!' : winner + ' CHAMPS';
       } else text = text.replace(/\n/g, ' ');
       announce(text, a[1] === 'stay' || a[1] === 'ko', a[2] || '');
       if (a[1] === 'ko' || a[1] === 'stay') hype = 1;
@@ -904,7 +904,7 @@
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'rgba(0,0,0,0.7)';
     ctx.strokeText(ann.text, 0, 0);
-    ctx.fillStyle = ann.text === 'K.O.' ? '#ffd166' : '#f1ecff';
+    ctx.fillStyle = ann.text === 'LIGHTS OUT' ? '#ffd166' : '#f1ecff';
     ctx.fillText(ann.text, 0, 0);
     if (ann.sub) {
       ctx.font = '700 11px -apple-system, system-ui, sans-serif';

@@ -13,14 +13,14 @@ A 3D fighting game for up to four fighters. It runs in the browser on computers 
   - COUNTER 1.4×: hit someone while their own attack is still winding up.
   - BACK ATTACK 1.5×: hit someone facing away (easiest with 3 or 4 fighters).
   - JUGGLE 1.3×: hit someone who's been knocked into the air.
-  - FINISHER 1.5×: a kick that ends a combo of 3 or more hits.
+  - SHOWSTOPPER 1.5×: a kick that ends a combo of 3 or more hits.
   - EDGE SLAM +6: knock someone into the edge of the ring with a kick or super. Once every 4 seconds per fighter, and they bounce back in.
   - PARRY: start blocking just as a hit lands (within about 0.13 s). You take nothing, and the attacker is stunned. Only the hardest CPUs parry, and only sometimes.
   - A kick from the ground passes under anyone in the air, so jump over kicks (punches still reach).
-- **CPU levels:** Normal and up punish attacks you whiff, kick you out of jumps, cancel combos into their super and wait out your block. Extreme does all of that almost every time and hits harder. Adaptive saves your power (0 to 100) and starts every match at it. During a fight the CPU's live level goes up when you hurt it and down when it hurts you, so fights stay close, and it counters your habits: more anti-air if you jump a lot, more blocking and punishing if you attack a lot, more baiting if you block a lot. After every round your power moves toward how you actually played (fast at first, steadier over time), and the end screen shows the change. Power is saved in the browser (separately on the watch). The CPU's tag shows its current level.
+- **CPU levels:** Normal and up punish attacks you whiff, punch you out of jumps, cancel combos into their super and wait out your block. Extreme does all of that almost every time and hits harder. Adaptive saves your power (0 to 100) and starts every match at it. During a fight the CPU's live level goes up when you hurt it and down when it hurts you, so fights stay close, and it counters your habits: more anti-air if you jump a lot, more blocking and punishing if you attack a lot, more baiting if you block a lot. After every bout your power moves toward how you actually played (fast at first, steadier over time), and the end screen shows the change. Power is saved in the browser (separately on the watch). The CPU's tag shows its current level.
 - **Online rooms:** one player hosts and gets a 5-letter room code. Up to 3 friends join with the code from a computer or an Apple Watch, and any room can be hosted from either one. The host picks the number of fighters, and CPUs fill the empty spots. If someone leaves mid-match, they forfeit: their fighter leaves the ring for the rest of the match, and if only one fighter is left, that player wins.
 
-With 3 or 4 fighters it's a free-for-all. Each fighter faces the nearest opponent, and attacks hit anyone in front of them. The last fighter standing wins the round, and the first to win two rounds wins the match.
+With 3 or 4 fighters it's a free-for-all. Each fighter faces the nearest opponent, and attacks hit anyone in front of them. The last fighter standing wins the bout, and the first to win two bouts is the champion.
 
 ## Controls
 

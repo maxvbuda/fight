@@ -119,7 +119,7 @@
     S.timer = S.opts.roundTime || 99;
     S.phase = 'intro'; S.phaseT = 0; S.timeScale = 1; S.hitstop = 0; S.winner = -1; S.flags = {};
     var onePointAway = S.fighters.filter(function (f) { return f.wins === 1; }).length;
-    emit(S, 'announce', [onePointAway >= 2 ? 'FINAL\nROUND' : 'ROUND ' + S.round, 'go']);
+    emit(S, 'announce', [onePointAway >= 2 ? 'DECIDER' : 'BOUT ' + S.round, 'go']);
   }
 
   function rematch(S) {
@@ -335,7 +335,7 @@
   //   COUNTER    hit someone whose own attack is winding up  1.4x
   //   BACK ATTACK hit someone facing away from you            1.5x
   //   JUGGLE     hit someone knocked up into the air         1.3x
-  //   FINISHER   a kick that ends a combo of 3+ hits         1.5x
+  //   SHOWSTOPPER a kick that ends a combo of 3+ hits        1.5x
   // Also: EDGE SLAM (knocked into the ring's edge, +6) and PARRY (block at the last moment).
   function trickOf(att, def, m) {
     var names = [], mult = 1, a = att.atk, d = def.atk;
@@ -345,7 +345,7 @@
         if (m === MOVES.kick) add(a.dive ? 'DIVE KICK' : 'JUMP KICK', a.dive ? 1.9 : 1.7);
         else add('JUMP PUNCH', 1.35);
       }
-      if (m === MOVES.kick && def.stun > 0 && att.combo >= 2) add('FINISHER', 1.5);
+      if (m === MOVES.kick && def.stun > 0 && att.combo >= 2) add('SHOWSTOPPER', 1.5);
     }
     if (d && d.name !== 'super' && d.t < MOVES[d.name].start) add('COUNTER', 1.4);
     var fx = Math.sin(def.yaw), fz = Math.cos(def.yaw), tx = att.x - def.x, tz = att.z - def.z, tl = Math.sqrt(tx * tx + tz * tz) || 1;
@@ -422,9 +422,9 @@
     if (alive.length <= 1) {
       endRound(S, alive.length ? alive[0].idx : att.idx);
       S.timeScale = 0.3;
-      emit(S, 'announce', ['K.O.', 'ko']);
+      emit(S, 'announce', ['LIGHTS\nOUT', 'ko']);
     } else {
-      emit(S, 'announce', [def.name + ' OUT', 'go']);
+      emit(S, 'announce', [def.name + ' IS DOWN', 'go']);
     }
   }
 
@@ -465,7 +465,7 @@
     var top = Math.max.apply(null, alive.map(function (f) { return f.hp; }));
     var leaders = alive.filter(function (f) { return f.hp === top; });
     endRound(S, leaders.length === 1 ? leaders[0].idx : -1);
-    emit(S, 'announce', ['TIME', 'ko']);
+    emit(S, 'announce', ["TIME'S UP", 'ko']);
     emit(S, 'sfx', 'bell');
   }
 
@@ -499,7 +499,7 @@
     separateAll(S);
 
     if (S.phase === 'intro') {
-      if (!S.flags.fight && S.phaseT > 1.3) { S.flags.fight = true; emit(S, 'announce', ['FIGHT!', 'go']); emit(S, 'sfx', 'bell'); }
+      if (!S.flags.fight && S.phaseT > 1.3) { S.flags.fight = true; emit(S, 'announce', ['BRAWL!', 'go']); emit(S, 'sfx', 'bell'); }
       if (S.phaseT > 1.8) { S.phase = 'fight'; S.phaseT = 0; }
     } else if (S.phase === 'fight') {
       if (S.adapt) adaptHabits(S, dt);
@@ -511,8 +511,8 @@
         S.flags.win = true;
         var w = S.fighters[S.winner];
         if (w && w.state !== 'ko') { w.atk = null; w.stun = 0; w.state = 'win'; }
-        if (matchOver(S)) emit(S, 'announce', [w.name + '\nVICTORY', 'stay', '']);
-        else emit(S, 'announce', [w ? w.name + ' WINS' : 'DRAW', 'stay', w && w.hp >= 100 ? 'PERFECT' : '']);
+        if (matchOver(S)) emit(S, 'announce', [w.name + '\nCHAMPION', 'stay', '']);
+        else emit(S, 'announce', [w ? w.name + ' TAKES IT' : 'DEAD EVEN', 'stay', w && w.hp >= 100 ? 'UNTOUCHED' : '']);
       }
       if (S.phaseT > 4.2) {
         if (matchOver(S)) S.phase = 'over';
