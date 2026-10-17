@@ -306,14 +306,16 @@
     f.vx *= fr; f.vz *= fr;
     var r = Math.sqrt(f.x * f.x + f.z * f.z);
     if (f.slamT > 0) f.slamT -= dt;
+    if (f.slamCool > 0) f.slamCool -= dt;
     if (r > ARENA_R) {
       f.x *= ARENA_R / r; f.z *= ARENA_R / r;
-      // EDGE SLAM: knocked hard into the ring's edge. Bonus damage and a bounce back in.
-      var sp = Math.sqrt(f.vx * f.vx + f.vz * f.vz);
-      if (f.slamT > 0 && sp > 0.4 && f.state !== 'ko') {
-        f.slamT = 0;
+      // EDGE SLAM: knocked by a kick or super into the ring's edge. Bonus damage and a bounce
+      // back in. Only once every 4 seconds, so you can't pin someone at the edge and farm it.
+      var out = (f.vx * f.x + f.vz * f.z) / (r || 1);
+      if (f.slamT > 0 && out > 0.4 && !(f.slamCool > 0) && f.state !== 'ko') {
+        f.slamT = 0; f.slamCool = 4;
         var by = S.fighters[f.slamBy];
-        f.vx *= -0.45; f.vz *= -0.45;
+        f.vx = -f.x / r * 3.5; f.vz = -f.z / r * 3.5;
         f.hp = Math.max(0, f.hp - 6);
         f.flash = 0.12;
         emit(S, 'trick', ['EDGE SLAM', f.slamBy, '+6 DAMAGE']);
@@ -387,7 +389,7 @@
     if (kl < 1e-4) { kx = att.dirX; kz = att.dirZ; kl = 1; }
     var push = m.push * (blocked ? 0.55 : 1) * (1 + (trick.mult - 1) * 0.6);
     def.vx = kx / kl * push; def.vz = kz / kl * push;
-    if (!blocked && push >= 4) { def.slamT = 0.6; def.slamBy = att.idx; }
+    if (!blocked && m.push >= 4) { def.slamT = 0.6; def.slamBy = att.idx; }
 
     var hx = r3(att.x + (def.x - att.x) * 0.7), hz = r3(att.z + (def.z - att.z) * 0.7);
     var hy = r3(Math.max(att.y, def.y) + m.h);
