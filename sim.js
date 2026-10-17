@@ -207,7 +207,8 @@
   }
   function startAttack(S, f, name) {
     // air: started mid-jump, which makes it a jump attack (more damage, see resolveHit).
-    f.atk = { name: name, t: 0, hit: false, hits: [], waved: false, air: f.y > 0.05 };
+    // dive: started while already falling, which makes a kick a DIVE KICK.
+    f.atk = { name: name, t: 0, hit: false, hits: [], waved: false, air: f.y > 0.05, dive: f.y > 0.05 && f.vy < 0 };
     f.state = 'attack';
     if (name === 'super') { f.meter = 0; emit(S, 'sfx', 'charge'); }
     else emit(S, 'sfx', 'whoosh');
@@ -268,12 +269,13 @@
         else if (a.t >= m.start + m.active + m.rec) { f.atk = null; f.state = 'idle'; }
       }
     } else {
+      var wasBlock = f.state === 'block';
       f.state = 'idle';
       if (inp.super && f.meter >= 100) startAttack(S, f, 'super');
       else if (inp.punch) startAttack(S, f, nextPunch(f));
       else if (inp.kick) startAttack(S, f, 'kick');
       else if (!grounded) { mvx = f.airX; mvz = f.airZ; }
-      else if (inp.block) f.state = 'block';
+      else if (inp.block) { if (!wasBlock) f.blockAt = f.clock; f.state = 'block'; }
       else {
         var ml = Math.sqrt(inp.mx * inp.mx + inp.mz * inp.mz);
         var ix = ml > 1 ? inp.mx / ml : inp.mx, iz = ml > 1 ? inp.mz / ml : inp.mz;
@@ -303,21 +305,70 @@
     var fr = Math.exp(-(f.y > 0 ? 0.6 : 7) * dt);
     f.vx *= fr; f.vz *= fr;
     var r = Math.sqrt(f.x * f.x + f.z * f.z);
-    if (r > ARENA_R) { f.x *= ARENA_R / r; f.z *= ARENA_R / r; }
+    if (f.slamT > 0) f.slamT -= dt;
+    if (r > ARENA_R) {
+      f.x *= ARENA_R / r; f.z *= ARENA_R / r;
+      // EDGE SLAM: knocked hard into the ring's edge. Bonus damage and a bounce back in.
+      var sp = Math.sqrt(f.vx * f.vx + f.vz * f.vz);
+      if (f.slamT > 0 && sp > 0.4 && f.state !== 'ko') {
+        f.slamT = 0;
+        var by = S.fighters[f.slamBy];
+        f.vx *= -0.45; f.vz *= -0.45;
+        f.hp = Math.max(0, f.hp - 6);
+        f.flash = 0.12;
+        emit(S, 'trick', ['EDGE SLAM', f.slamBy, '+6 DAMAGE']);
+        emit(S, 'burst', [r3(f.x), 1.1, r3(f.z), by ? by.color : 0xffd166, 30, 7]);
+        emit(S, 'sfx', 'heavy');
+        emit(S, 'shake', 0.3);
+        if (f.hp <= 0 && by) knockOut(S, by, f);
+      }
+    }
     animate(f, dt);
   }
 
-  // Tricks: bonus damage for a jump kick or jump punch, and for a counter (hitting someone while
-  // their own attack is still winding up). They stack, up to 2.2 times the damage.
+  // Tricks: bonus damage for hitting in a special way. They stack, up to 2.5 times the damage.
+  //   DIVE KICK  kick started on the way down from a jump    1.9x
+  //   JUMP KICK  kick started on the way up                  1.7x
+  //   JUMP PUNCH punch in the air (only reaches other jumpers) 1.35x
+  //   COUNTER    hit someone whose own attack is winding up  1.4x
+  //   BACK ATTACK hit someone facing away from you            1.5x
+  //   JUGGLE     hit someone knocked up into the air         1.3x
+  //   FINISHER   a kick that ends a combo of 3+ hits         1.5x
+  // Also: EDGE SLAM (knocked into the ring's edge, +6) and PARRY (block at the last moment).
   function trickOf(att, def, m) {
-    var name = '', mult = 1, a = att.atk, d = def.atk;
-    if (a && a.air && m !== MOVES.super) { name = m === MOVES.kick ? 'JUMP KICK' : 'JUMP PUNCH'; mult = m === MOVES.kick ? 1.7 : 1.35; }
-    if (d && d.name !== 'super' && d.t < MOVES[d.name].start) { name = name ? name + ' + COUNTER' : 'COUNTER'; mult *= 1.4; }
-    return { name: name, mult: Math.min(mult, 2.2) };
+    var names = [], mult = 1, a = att.atk, d = def.atk;
+    var add = function (n, k) { names.push(n); mult *= k; };
+    if (m !== MOVES.super) {
+      if (a && a.air) {
+        if (m === MOVES.kick) add(a.dive ? 'DIVE KICK' : 'JUMP KICK', a.dive ? 1.9 : 1.7);
+        else add('JUMP PUNCH', 1.35);
+      }
+      if (m === MOVES.kick && def.stun > 0 && att.combo >= 2) add('FINISHER', 1.5);
+    }
+    if (d && d.name !== 'super' && d.t < MOVES[d.name].start) add('COUNTER', 1.4);
+    var fx = Math.sin(def.yaw), fz = Math.cos(def.yaw), tx = att.x - def.x, tz = att.z - def.z, tl = Math.sqrt(tx * tx + tz * tz) || 1;
+    if ((fx * tx + fz * tz) / tl < -0.2) add('BACK ATTACK', 1.5);
+    if (def.y > 0.3 && def.stun > 0 && !(a && a.air)) add('JUGGLE', 1.3);
+    // Long names are hard to read: show the first two, plus how many more.
+    var name = names.slice(0, 2).join(' + ') + (names.length > 2 ? ' +' + (names.length - 2) : '');
+    return { name: name, mult: Math.min(mult, 2.5), launch: names.length > 0 && names[0].indexOf('KICK') > 0 };
   }
 
   function resolveHit(S, att, def, m) {
     var blocked = def.state === 'block';
+    // PARRY: blocking just as the hit lands stuns the attacker and costs nothing. The CPU only
+    // manages it some of the time on the hardest levels.
+    if (blocked && m !== MOVES.super && def.clock - (def.blockAt || -9) < 0.13 &&
+        (def.kind !== 'cpu' || Math.random() < Math.max(0, diffOf(S).react - 0.7))) {
+      att.atk = null; att.stun = 0.6; att.state = 'hit'; att.combo = 0;
+      def.meter = Math.min(100, def.meter + 10);
+      emit(S, 'trick', ['PARRY', def.idx, 'STUNNED']);
+      emit(S, 'burst', [r3(att.x + (def.x - att.x) * 0.6), 1.4, r3(att.z + (def.z - att.z) * 0.6), 0xffffff, 28, 7]);
+      emit(S, 'sfx', 'block');
+      emit(S, 'shake', 0.15);
+      S.hitstop = 0.12;
+      return;
+    }
     var trick = trickOf(att, def, m);
     if (S.adapt && isHuman(att)) S.adapt.habits.atk++;
     var dmg = m.dmg * trick.mult * (att.kind === 'cpu' ? diffOf(S).dmg : 1);
@@ -336,6 +387,7 @@
     if (kl < 1e-4) { kx = att.dirX; kz = att.dirZ; kl = 1; }
     var push = m.push * (blocked ? 0.55 : 1) * (1 + (trick.mult - 1) * 0.6);
     def.vx = kx / kl * push; def.vz = kz / kl * push;
+    if (!blocked && push >= 4) { def.slamT = 0.6; def.slamBy = att.idx; }
 
     var hx = r3(att.x + (def.x - att.x) * 0.7), hz = r3(att.z + (def.z - att.z) * 0.7);
     var hy = r3(Math.max(att.y, def.y) + m.h);
@@ -348,8 +400,8 @@
       // A super in progress can't be interrupted: the defender takes the damage but keeps attacking.
       if (!(def.atk && def.atk.name === 'super')) { def.stun = m.stun; def.atk = null; def.state = 'hit'; }
       if (m.launch || def.hp <= 0) def.vy = 6.2;
-      else if (trick.name.indexOf('JUMP KICK') === 0) def.vy = 4.5;
-      if (trick.name) emit(S, 'trick', [trick.name, att.idx, Math.round(trick.mult * 100) / 100]);
+      else if (trick.launch) def.vy = 4.5;
+      if (trick.name) emit(S, 'trick', [trick.name, att.idx, '×' + Math.round(trick.mult * 100) / 100 + ' DAMAGE']);
       var big = m === MOVES.super || trick.mult >= 1.6;
       emit(S, 'burst', [hx, hy, hz, att.color, big ? 50 : m === MOVES.kick ? 26 : 18, big ? 9 : 6]);
       emit(S, 'sfx', trick.mult >= 1.6 && m !== MOVES.super ? 'heavy' : m.sound);

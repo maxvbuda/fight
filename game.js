@@ -756,10 +756,10 @@ function announce(text, mode = 'go', sub = '') {
   subEl.textContent = sub;
 }
 const trickEl = $('#trick');
-function showTrick(name, idx, mult) {
+function showTrick(name, idx, label) {
   trickEl.className = '';
   void trickEl.offsetWidth; // restart animation
-  trickEl.innerHTML = `${name}<small>×${mult} DAMAGE</small>`;
+  trickEl.innerHTML = `${name}<small>${label}</small>`;
   trickEl.style.setProperty('--c', hexStr(ROSTER[idx]?.color ?? 0xffd166));
   trickEl.className = 'show';
 }

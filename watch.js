@@ -93,7 +93,7 @@
     if (type === 'burst') burst(a[0], a[1], a[2], hexRgb(a[3]), a[4], a[5]);
     else if (type === 'wave') waves.push({ x: a[0], y: a[1], z: a[2], t: 0, c: hexRgb(a[3]) });
     else if (type === 'shake') shake = Math.max(shake, a * 15);
-    else if (type === 'trick') trick = { text: a[0], mult: a[2], idx: a[1], t: 0 };
+    else if (type === 'trick') trick = { text: a[0], label: String(a[2]).toLowerCase(), idx: a[1], t: 0 };
     else if (type === 'announce') {
       var text = a[0];
       if (/VICTORY/.test(text)) {
@@ -871,16 +871,19 @@
     ctx.rotate(-0.06);
     ctx.scale(scale, scale);
     ctx.textAlign = 'center';
-    ctx.font = '900 ' + Math.min(W * 0.1, 22) + 'px -apple-system, system-ui, sans-serif';
+    var size = Math.min(W * 0.1, 22);
+    ctx.font = '900 ' + size + 'px -apple-system, system-ui, sans-serif';
+    var tw = ctx.measureText(trick.text).width;
+    if (tw > W * 0.9) ctx.font = '900 ' + Math.floor(size * W * 0.9 / tw) + 'px -apple-system, system-ui, sans-serif';
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'rgba(0,0,0,0.75)';
     ctx.strokeText(trick.text, 0, 0);
     ctx.fillStyle = '#ffd166';
     ctx.fillText(trick.text, 0, 0);
     ctx.font = '700 10px -apple-system, system-ui, sans-serif';
-    ctx.strokeText('×' + trick.mult + ' damage', 0, 14);
+    ctx.strokeText(trick.label, 0, 14);
     ctx.fillStyle = '#f1ecff';
-    ctx.fillText('×' + trick.mult + ' damage', 0, 14);
+    ctx.fillText(trick.label, 0, 14);
     ctx.restore();
   }
   function drawAnnounce() {
