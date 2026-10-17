@@ -74,7 +74,7 @@ canvas { display: block; }
 .panel h3, .controls h3, .eyebrow { margin: 0; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .lbl { min-width: 120px; color: var(--muted); font-size: 14px; }
-.seg { display: flex; }
+.seg { display: flex; flex-wrap: wrap; max-width: 100%; }
 .seg button { padding: 9px 14px; font-size: 13px; }
 .seg button + button { border-left: none; }
 .seg button.on { background: rgba(255, 209, 102, 0.18); border-color: var(--gold); color: var(--gold); }
@@ -171,4 +171,7 @@ html.phone #netTag { display: none; }
   #tbtns button { width: 58px; height: 58px; }
   #tPause { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 132px); }
   html.phone #announce { font-size: 56px; }
+}
+@media (max-width: 480px) {
+  .seg button { padding: 9px 9px; font-size: 12px; letter-spacing: 0.03em; }
 }

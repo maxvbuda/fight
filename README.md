@@ -6,7 +6,8 @@ A 3D fighting game for up to four fighters. It runs in the browser on computers 
 
 ## Modes
 
-- **On this computer:** pick 2, 3 or 4 fighters and 1 to 4 players. CPU fighters (Easy, Normal or Hard) fill the empty spots. Players 1 and 2 share the keyboard, and players 3 and 4 use gamepads.
+- **On this computer:** pick 2, 3 or 4 fighters and 1 to 4 players. CPU fighters fill the empty spots: Easy, Normal, Hard, Extreme or Adaptive. Players 1 and 2 share the keyboard, and players 3 and 4 use gamepads.
+- **CPU levels:** Normal and up punish attacks you whiff, kick you out of jumps, cancel combos into their super and wait out your block. Extreme does all of that almost every time and hits harder. Adaptive has a level from 0 (Easy) to 100 (Extreme): it goes up when you hurt it or win a round and down when it hurts you or wins, so fights stay close. It also counters your habits: more anti-air if you jump a lot, more blocking and punishing if you attack a lot, more baiting if you block a lot. Its level and your habits are saved in the browser (separately on the watch), so it starts next match where it left off. The CPU's tag shows its current level.
 - **Online rooms:** one player hosts and gets a 5-letter room code. Up to 3 friends join with the code from a computer or an Apple Watch, and any room can be hosted from either one. The host picks the number of fighters, and CPUs fill the empty spots. If someone leaves mid-match, they forfeit: their fighter leaves the ring for the rest of the match, and if only one fighter is left, that player wins.
 
 With 3 or 4 fighters it's a free-for-all. Each fighter faces the nearest opponent, and attacks hit anyone in front of them. The last fighter standing wins the round, and the first to win two rounds wins the match.

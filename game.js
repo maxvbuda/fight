@@ -1239,7 +1239,7 @@ function startLocal() {
   A.humans = [];
   for (let i = 0; i < humans; i++) A.humans.push({ fidx: i, bind: humans === 1 ? 'solo' : i === 0 ? 'p1' : i === 1 ? 'p2' : 'none', pad: i });
   A.you = A.humans.map((h) => h.fidx);
-  beginMatch('local', NBSim.createMatch({ slots, diff: A.opts.diff, profile: 'desktop', roundTime: 99 }));
+  beginMatch('local', NBSim.createMatch({ slots, diff: A.opts.diff, adapt: loadAdapt(), profile: 'desktop', roundTime: 99 }));
 }
 
 function hostStart() {
@@ -1248,7 +1248,7 @@ function hostStart() {
   const slots = [{ kind: 'local', label: 'P1' }];
   for (let i = 0; i < guests; i++) slots.push({ kind: 'remote', label: 'P' + (i + 2) });
   while (slots.length < n) slots.push({ kind: 'cpu', label: 'CPU' });
-  const S = NBSim.createMatch({ slots, diff: A.opts.diff, profile: 'desktop', roundTime: 99 });
+  const S = NBSim.createMatch({ slots, diff: A.opts.diff, adapt: loadAdapt(), profile: 'desktop', roundTime: 99 });
   NBNet.startMatch(slots, { roundTime: 99, profile: 'desktop' });
   A.humans = [{ fidx: 0, bind: 'solo', pad: 0 }];
   A.you = [0];
@@ -1275,12 +1275,21 @@ function rematch() {
 const statusEl = $('#netStatus');
 function setStatus(t) { statusEl.textContent = t; $('#lobbyNote').textContent = A.lobbyRole ? t : ''; }
 
+// Adaptive CPU: the level it builds for you is kept in this browser between matches.
+function loadAdapt() { try { return JSON.parse(localStorage.getItem('nbAdapt-desktop')) || null; } catch (e) { return null; } }
+function saveAdapt(ad) { try { localStorage.setItem('nbAdapt-desktop', JSON.stringify({ level: Math.round(ad.level * 10) / 10, habits: ad.habits })); } catch (e) {} }
+
 function updateLocalNote() {
   const { fighters, humans } = A.opts;
   const n = Math.max(fighters, humans);
   const parts = [`${humans} player${humans > 1 ? 's' : ''}${n > humans ? ` vs ${n - humans} CPU` : ''}.`];
   if (humans > fighters) parts.push(`Fighters raised to ${n} to fit everyone.`);
   if (humans >= 3) parts.push('Players 3 and 4 need gamepads.');
+  if (A.opts.diff === 'extreme') parts.push('Extreme: blocks almost everything, punishes mistakes, kicks you out of jumps.');
+  if (A.opts.diff === 'adaptive') {
+    const ad = loadAdapt();
+    parts.push(`Adaptive CPU, level ${Math.round(ad ? ad.level : 40)} of 100. It fights as hard as you do, learns your habits and saves the level it builds for you.`);
+  }
   $('#localNote').textContent = parts.join(' ');
 }
 document.querySelectorAll('.seg').forEach((seg) => seg.addEventListener('click', (e) => {
@@ -1441,7 +1450,7 @@ function updateHud(S, dt) {
     h.meter.classList.toggle('full', f.meter >= 100);
     h.el.classList.toggle('out', f.kind === 'gone' || (f.state === 'ko' && S.phase === 'fight'));
     for (let p = 0; p < 2; p++) h.pips[p].classList.toggle('won', f.wins > p);
-    const tag = tagFor(f) || (f.label === 'CPU' ? 'CPU' : '');
+    const tag = tagFor(f) || (f.label === 'CPU' ? (S.adapt ? `LV ${Math.round(S.adapt.level)}` : 'CPU') : '');
     if (h.tag.textContent !== tag) h.tag.textContent = tag;
     h.tag.classList.toggle('you', tag === 'YOU');
     const live = f.combo >= 2 && S.fighters.some((o) => o !== f && o.stun > 0);
@@ -1540,6 +1549,7 @@ function frame(now) {
       return NONE;
     });
     NBSim.step(S, rdt, inputs);
+    if (S.adapt?.save) { S.adapt.save = false; saveAdapt(S.adapt); updateLocalNote(); }
     if (A.mode === 'host') NBNet.consumeInputs();
     const ev = drain(S);
     if (A.mode === 'host') {

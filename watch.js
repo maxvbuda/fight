@@ -198,7 +198,15 @@
   }
 
   // ---------- Screens ----------
-  var DIFF_LABEL = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
+  var DIFF_LABEL = { easy: 'Easy', normal: 'Normal', hard: 'Hard', extreme: 'Extreme', adaptive: 'Adaptive' };
+  var DIFFS = ['easy', 'normal', 'hard', 'extreme', 'adaptive'];
+  // Adaptive CPU: the level it builds for you is kept on this watch between matches.
+  function loadAdapt() { try { return JSON.parse(localStorage.getItem('nbAdapt-watch')) || null; } catch (e) { return null; } }
+  function saveAdapt(ad) { try { localStorage.setItem('nbAdapt-watch', JSON.stringify({ level: Math.round(ad.level * 10) / 10, habits: ad.habits })); } catch (e) {} }
+  function diffText() {
+    var ad = A.opts.diff === 'adaptive' && loadAdapt();
+    return 'CPU: ' + DIFF_LABEL[A.opts.diff] + (A.opts.diff === 'adaptive' ? ' ' + Math.round(ad ? ad.level : 40) : '');
+  }
   function show(id) {
     ['menu', 'lobby'].forEach(function (x) { $(x).hidden = x !== id; });
     $('pad').hidden = id !== 'game';
@@ -224,7 +232,7 @@
     netMsg('');
     var slots = [{ kind: 'local', label: 'YOU' }];
     while (slots.length < A.opts.fighters) slots.push({ kind: 'cpu', label: 'CPU' });
-    beginMatch('local', Sim.createMatch({ slots: slots, diff: A.opts.diff, profile: 'watch', roundTime: 60 }), 0);
+    beginMatch('local', Sim.createMatch({ slots: slots, diff: A.opts.diff, adapt: loadAdapt(), profile: 'watch', roundTime: 60 }), 0);
   }
   function hostStart() {
     var guests = Net.guestCount();
@@ -232,7 +240,7 @@
     var slots = [{ kind: 'local', label: 'P1' }];
     for (var i = 0; i < guests; i++) slots.push({ kind: 'remote', label: 'P' + (i + 2) });
     while (slots.length < n) slots.push({ kind: 'cpu', label: 'CPU' });
-    var S = Sim.createMatch({ slots: slots, diff: A.opts.diff, profile: 'watch', roundTime: 60 });
+    var S = Sim.createMatch({ slots: slots, diff: A.opts.diff, adapt: loadAdapt(), profile: 'watch', roundTime: 60 });
     Net.startMatch(slots, { roundTime: 60, profile: 'watch' });
     beginMatch('host', S, 0);
   }
@@ -297,8 +305,8 @@
   $('fighters').addEventListener('click', cycleFighters);
   $('lbFighters').addEventListener('click', cycleFighters);
   $('diff').addEventListener('click', function () {
-    A.opts.diff = A.opts.diff === 'easy' ? 'normal' : A.opts.diff === 'normal' ? 'hard' : 'easy';
-    this.textContent = 'CPU: ' + DIFF_LABEL[A.opts.diff];
+    A.opts.diff = DIFFS[(DIFFS.indexOf(A.opts.diff) + 1) % DIFFS.length];
+    this.textContent = diffText();
   });
   $('host').addEventListener('click', function () { showLobby('host'); Net.host('watch'); });
   $('joinForm').addEventListener('submit', function (e) {
@@ -917,6 +925,7 @@
       });
       var tSim = performance.now();
       Sim.step(S, rdt, inputs);
+      if (S.adapt && S.adapt.save) { S.adapt.save = false; saveAdapt(S.adapt); $('diff').textContent = diffText(); }
       prof.sim += performance.now() - tSim;
       if (A.mode === 'host') Net.consumeInputs();
       var ev = drain(S);

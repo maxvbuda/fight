@@ -31,18 +31,25 @@
   };
 
   // CPU tuning. The watch profile is gentler because its controls are slower to use.
+  //   react: chance to block an incoming attack   aggr: how often it attacks   think: seconds between decisions
+  //   combo: chance to chain after a hit   dmg: damage multiplier   punish: chance to hit you while you recover
+  //   antiair: chance to kick you out of a jump   superCombo: chance to cancel a hit into its super
+  //   bait: chance to back off and wait out your block
   var DIFF = {
     desktop: {
-      easy: { react: 0.12, aggr: 0.35, think: 0.5, combo: 0.15, dmg: 1 },
-      normal: { react: 0.38, aggr: 0.6, think: 0.3, combo: 0.45, dmg: 1 },
-      hard: { react: 0.68, aggr: 0.85, think: 0.16, combo: 0.8, dmg: 1 }
+      easy: { react: 0.12, aggr: 0.35, think: 0.5, combo: 0.15, dmg: 1, punish: 0, antiair: 0, superCombo: 0, bait: 0 },
+      normal: { react: 0.45, aggr: 0.65, think: 0.26, combo: 0.55, dmg: 1, punish: 0.25, antiair: 0.2, superCombo: 0.2, bait: 0.1 },
+      hard: { react: 0.78, aggr: 0.88, think: 0.12, combo: 0.9, dmg: 1.08, punish: 0.6, antiair: 0.5, superCombo: 0.6, bait: 0.35 },
+      extreme: { react: 0.93, aggr: 0.96, think: 0.06, combo: 1, dmg: 1.22, punish: 0.95, antiair: 0.85, superCombo: 1, bait: 0.7 }
     },
     watch: {
-      easy: { react: 0.05, aggr: 0.2, think: 0.8, combo: 0, dmg: 0.6 },
-      normal: { react: 0.2, aggr: 0.4, think: 0.5, combo: 0.2, dmg: 0.8 },
-      hard: { react: 0.45, aggr: 0.65, think: 0.28, combo: 0.5, dmg: 1 }
+      easy: { react: 0.05, aggr: 0.2, think: 0.8, combo: 0, dmg: 0.6, punish: 0, antiair: 0, superCombo: 0, bait: 0 },
+      normal: { react: 0.25, aggr: 0.45, think: 0.45, combo: 0.25, dmg: 0.8, punish: 0.1, antiair: 0.05, superCombo: 0.1, bait: 0 },
+      hard: { react: 0.55, aggr: 0.7, think: 0.24, combo: 0.6, dmg: 1, punish: 0.35, antiair: 0.25, superCombo: 0.4, bait: 0.2 },
+      extreme: { react: 0.8, aggr: 0.88, think: 0.12, combo: 0.9, dmg: 1.12, punish: 0.75, antiair: 0.6, superCombo: 0.85, bait: 0.5 }
     }
   };
+  var LADDER = ['easy', 'normal', 'hard', 'extreme'];
 
   // Pose = joint angles in radians. P() fills unspecified joints from the guard stance.
   var POSE_KEYS = ['hy', 'sx', 'sy', 'nx', 'lsx', 'lsz', 'rsx', 'rsz', 'lex', 'rex', 'lhx', 'lhz', 'rhx', 'rhz', 'lkx', 'rkx'];
@@ -80,13 +87,22 @@
     });
   }
 
-  // opts: { slots: [{kind: 'local'|'remote'|'cpu', label}], diff, profile: 'desktop'|'watch', roundTime }
+  // opts: { slots: [{kind: 'local'|'remote'|'cpu', label}], diff, profile: 'desktop'|'watch', roundTime,
+  //         adapt: saved adaptive profile { level, habits } when diff is 'adaptive' }
   function createMatch(opts) {
     var S = {
       opts: opts, fighters: opts.slots.map(function (s, i) { return makeFighter(i, s); }),
       round: 1, phase: 'intro', timer: opts.roundTime || 99, phaseT: 0, timeScale: 1, hitstop: 0,
       winner: -1, flags: {}, events: []
     };
+    if (opts.diff === 'adaptive') {
+      var saved = opts.adapt || {}, h = saved.habits || {};
+      S.adapt = {
+        level: clamp(+saved.level >= 0 ? +saved.level : 40, 0, 100),
+        habits: { jump: +h.jump || 0, atk: +h.atk || 0, block: +h.block || 0 },
+        save: false
+      };
+    }
     startRound(S);
     return S;
   }
@@ -108,7 +124,46 @@
     startRound(S);
   }
 
-  function diffOf(S) { return DIFF[S.opts.profile || 'desktop'][S.opts.diff || 'normal']; }
+  function diffOf(S) {
+    var table = DIFF[S.opts.profile || 'desktop'];
+    if (!S.adapt) return table[S.opts.diff] || table.normal;
+    return adaptiveDiff(table, S.adapt);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Adaptive CPU: a level from 0 (easy) to 100 (extreme) that rises when you beat it up and
+  // falls when it beats you, plus counters for your habits (jumping, attacking, blocking).
+  // The front ends save S.adapt between matches, so it remembers the level it built for you.
+  // ---------------------------------------------------------------------------
+  function adaptiveDiff(table, ad) {
+    var x = clamp(ad.level, 0, 100) / 100 * (LADDER.length - 1), i = Math.min(LADDER.length - 2, Math.floor(x)), t = x - i;
+    var a = table[LADDER[i]], b = table[LADDER[i + 1]], out = {}, k;
+    for (k in a) out[k] = a[k] + (b[k] - a[k]) * t;
+    var h = ad.habits;
+    out.antiair = Math.min(1, out.antiair + clamp(h.jump / 6, 0, 1) * 0.5);
+    out.react = Math.min(0.97, out.react + clamp(h.atk / 25, 0, 1) * 0.15);
+    out.punish = Math.min(1, out.punish + clamp(h.atk / 25, 0, 1) * 0.25);
+    out.bait = Math.min(1, out.bait + clamp(h.block / 0.3, 0, 1) * 0.5);
+    return out;
+  }
+  function isHuman(f) { return f.kind === 'local' || f.kind === 'remote'; }
+  function adaptLevel(S, by) {
+    if (!S.adapt) return;
+    var hasCpu = false, hasHuman = false;
+    S.fighters.forEach(function (f) { if (f.kind === 'cpu') hasCpu = true; else if (isHuman(f)) hasHuman = true; });
+    if (hasCpu && hasHuman) S.adapt.level = clamp(S.adapt.level + by, 0, 100);
+  }
+  // Habits fade over ~20 seconds of fighting: jumps and attacks are counts, block is a share of the time.
+  function adaptHabits(S, dt) {
+    var h = S.adapt.habits, fade = Math.exp(-dt / 20), blocking = 0, humans = 0;
+    h.jump *= fade; h.atk *= fade;
+    S.fighters.forEach(function (f) {
+      if (!isHuman(f) || f.state === 'ko') return;
+      humans++;
+      if (f.state === 'block') blocking++;
+    });
+    if (humans) h.block += (blocking / humans - h.block) * (1 - fade);
+  }
 
   // ---------------------------------------------------------------------------
   // Fighter update
@@ -198,6 +253,7 @@
         mvx = ix * speed; mvz = iz * speed;
         if (mvx * mvx + mvz * mvz > 0.01) { f.state = 'walk'; f.walkPh += dt * 10 * (fwd < -0.3 ? -1 : 1); }
         if (inp.jump) {
+          if (S.adapt && isHuman(f)) S.adapt.habits.jump++;
           f.vy = 7.4; f.airX = mvx * 1.15; f.airZ = mvz * 1.15; f.state = 'idle';
           emit(S, 'sfx', 'jump');
         }
@@ -224,6 +280,7 @@
 
   function resolveHit(S, att, def, m) {
     var blocked = def.state === 'block';
+    if (S.adapt && isHuman(att)) S.adapt.habits.atk++;
     var dmg = m.dmg * (att.kind === 'cpu' ? diffOf(S).dmg : 1);
     if (blocked) dmg *= m === MOVES.super ? 0.35 : 0.1;
     else {
@@ -231,6 +288,9 @@
       dmg *= Math.max(0.5, 1 - (att.combo - 1) * 0.08);
     }
     def.hp = Math.max(0, def.hp - dmg);
+    // Adaptive CPU: trading damage moves its level, so a close fight stays close.
+    if (!blocked && isHuman(att) && def.kind === 'cpu') adaptLevel(S, dmg * 0.12);
+    else if (!blocked && att.kind === 'cpu' && isHuman(def)) adaptLevel(S, -dmg * 0.12);
     att.meter = Math.min(100, att.meter + m.meter * (blocked ? 0.4 : 1));
     def.meter = Math.min(100, def.meter + dmg * 0.5);
     var kx = def.x - att.x, kz = def.z - att.z, kl = Math.sqrt(kx * kx + kz * kz);
@@ -301,6 +361,10 @@
   function endRound(S, winner) {
     S.winner = winner;
     if (winner >= 0) S.fighters[winner].wins++;
+    if (S.adapt && winner >= 0) {
+      adaptLevel(S, S.fighters[winner].kind === 'cpu' ? -6 : 6);
+      S.adapt.save = true;
+    }
     S.phase = 'ko'; S.phaseT = 0; S.flags = {};
   }
 
@@ -346,6 +410,7 @@
       if (!S.flags.fight && S.phaseT > 1.3) { S.flags.fight = true; emit(S, 'announce', ['FIGHT!', 'go']); emit(S, 'sfx', 'bell'); }
       if (S.phaseT > 1.8) { S.phase = 'fight'; S.phaseT = 0; }
     } else if (S.phase === 'fight') {
+      if (S.adapt) adaptHabits(S, dt);
       S.timer -= dt;
       if (S.timer <= 0) { S.timer = 0; timeUp(S); }
     } else if (S.phase === 'ko') {
@@ -387,8 +452,29 @@
       ai.blockT -= dt;
       if (ai.blocking && !me.atk) { inp.block = true; return inp; }
     }
-    if (me.atk && me.atk.hit && Math.random() < df.combo * dt * 12) {
-      if (Math.random() < 0.65) inp.punch = true; else inp.kick = true;
+    if (me.atk && me.atk.hit) {
+      // Cancel a landed hit into the super, or keep the combo going.
+      if (me.meter >= 100 && me.atk.name !== 'super' && Math.random() < df.superCombo * dt * 15) inp.super = true;
+      else if (Math.random() < df.combo * dt * 12) { if (Math.random() < 0.65) inp.punch = true; else inp.kick = true; }
+    }
+    if (!me.atk && me.stun <= 0) {
+      // Punish: hit the target while its attack is recovering (one roll per attack).
+      var ta = t.atk, tm = ta && MOVES[ta.name];
+      if (ta && ta !== ai.seenAtk && ta.t >= tm.start + tm.active) {
+        ai.seenAtk = ta;
+        if (d < 2.0 && Math.random() < df.punish) { if (d < 1.5) inp.punch = true; else inp.kick = true; return inp; }
+      }
+      // Anti-air: kick a target that jumps in close (one roll per jump).
+      if (t.y > 0.35 && !ai.airRolled) {
+        ai.airRolled = true;
+        ai.antiAir = Math.random() < df.antiair;
+      } else if (t.y <= 0) ai.airRolled = false;
+      if (ai.antiAir && t.y > 0.35 && t.y < 1.5 && d < 1.9) { ai.antiAir = false; inp.kick = true; return inp; }
+      // Bait: back off from a blocking target, then rush in when the guard drops.
+      if (t.state === 'block' && d < 2.2 && ai.act !== 'retreat' && Math.random() < df.bait * dt * 4) {
+        if (me.meter >= 100) { inp.super = true; return inp; }
+        ai.act = 'retreat'; ai.t = 0.35; ai.wasBait = true;
+      } else if (ai.wasBait && t.state !== 'block') { ai.wasBait = false; ai.act = 'approach'; ai.t = 0.15; }
     }
 
     ai.t -= dt;
@@ -504,7 +590,7 @@
 
   window.NBSim = {
     ARENA_R: ARENA_R, ROSTER: ROSTER, forfeit: forfeit, MOVES: MOVES, POSE_KEYS: POSE_KEYS, NONE: NONE,
-    createMatch: createMatch, rematch: rematch, step: step, idle: idle, nearest: nearest,
+    createMatch: createMatch, rematch: rematch, cpuInput: cpuInput, step: step, idle: idle, nearest: nearest,
     pack: pack, applySnap: applySnap, clamp: clamp, damp: damp, lerpAngle: lerpAngle
   };
 })();
